@@ -2,12 +2,31 @@ package com.ionic.sdk.agent.request.createkey;
 
 import com.ionic.sdk.agent.key.KeyAttributesMap;
 import com.ionic.sdk.agent.request.base.AgentRequestBase;
+import com.ionic.sdk.agent.service.IDC;
 
+import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
- * Represents the input for an Agent.createKeys() request.
+ * Represents the input for a request to the Ionic Machina
+ * Tools {@link com.ionic.sdk.agent.Agent#createKeys(CreateKeysRequest)} API call.
+ * <p>
+ * The request will contain information about {@link Key} objects, which specify the desired quantity of keys, as
+ * well as attributes that should be associated with the requested keys.  {@link CreateKeysRequest} may
+ * contain 1..n {@link Key} objects.
+ * <p>
+ * Each key returned from the call will be identified using a key id, accessed
+ * via {@link com.ionic.sdk.agent.key.KeyBase#getId()}.  This key id is typically associated with the data encrypted
+ * using the key.
+ * <p>
+ * The CreateKey / CreateKeys family of APIs allow for new AES keys to be securely generated, in the context of a data
+ * encryption usage.  Subsequent GetKey / GetKeys calls allow for the retrieval of the keys, via the key id, to enable
+ * permitted decryption of the secured data.
+ * <p>
+ * See <a href='https://dev.ionic.com/sdk/tasks/create-key' target='_blank'>Machina Developers</a> for
+ * more information about the CreateKey operation.
  */
 public class CreateKeysRequest extends AgentRequestBase {
 
@@ -21,6 +40,16 @@ public class CreateKeysRequest extends AgentRequestBase {
      */
     public CreateKeysRequest() {
         this.keyRequests = new ArrayList<Key>();
+    }
+
+    /**
+     * Constructor.
+     *
+     * @param keys an initial group of {@link Key} objects to include in the service transaction
+     */
+    public CreateKeysRequest(final Key... keys) {
+        this();
+        this.keyRequests.addAll(Arrays.asList(keys));
     }
 
     /**
@@ -40,10 +69,13 @@ public class CreateKeysRequest extends AgentRequestBase {
     }
 
     /**
-     * Retrieve the key request with the matching refId.
+     * Find the {@link CreateKeysRequest.Key} record associated with the specified reference id.
+     * <p>
+     * If the specified reference id is not found in the {@link CreateKeysRequest}, <code>null</code> is returned.
      *
-     * @param refId an identifier to correlate the request
-     * @return the matching key request
+     * @param refId a reference identifier to correlate {@link CreateKeysRequest.Key} records to the
+     *              corresponding {@link CreateKeysResponse.Key}
+     * @return the matching {@link CreateKeysRequest.Key} record; or <code>null</code> if not found
      */
     public final Key getKey(final String refId) {
         Key key = null;
@@ -56,10 +88,13 @@ public class CreateKeysRequest extends AgentRequestBase {
         return key;
     }
 
+    /** Value of serialVersionUID from maven coordinates "com.ionic:ionic-sdk:2.8.0". */
+    private static final long serialVersionUID = 7896365050876806964L;
+
     /**
      * Represents a discrete key request object in the context of a {@link CreateKeysRequest}.
      */
-    public static class Key {
+    public static class Key implements Serializable {
 
         /**
          * A reference to be used to associate any keys received in the response with the request.
@@ -80,6 +115,13 @@ public class CreateKeysRequest extends AgentRequestBase {
          * The attributes to be associated with the keys requested by this key request.
          */
         private final KeyAttributesMap mutableAttributes;
+
+        /**
+         * Constructor.
+         */
+        public Key() {
+            this(IDC.Payload.REF);
+        }
 
         /**
          * Constructor.
@@ -168,9 +210,8 @@ public class CreateKeysRequest extends AgentRequestBase {
 
         /**
          * @return the attributes to be associated with the keys requested by this key request
-         * @deprecated
-         *      Please migrate usages to the replacement {@link #getMutableAttributesMap()}
-         *      method (Ionic SDK 1.x API compatibility).
+         * @deprecated Please migrate usages to the replacement {@link #getMutableAttributesMap()}
+         * method (Ionic SDK 1.x API compatibility).
          */
         @Deprecated
         public final KeyAttributesMap getMutableAttributes() {
@@ -183,5 +224,8 @@ public class CreateKeysRequest extends AgentRequestBase {
         public final KeyAttributesMap getMutableAttributesMap() {
             return mutableAttributes;
         }
+
+        /** Value of serialVersionUID from maven coordinates "com.ionic:ionic-sdk:2.8.0". */
+        private static final long serialVersionUID = 6972104104350430296L;
     }
 }

@@ -1,9 +1,11 @@
 package com.ionic.sdk.agent.transaction;
 
-import com.ionic.sdk.agent.Agent;
 import com.ionic.sdk.agent.SdkVersion;
+import com.ionic.sdk.agent.ServiceProtocol;
+import com.ionic.sdk.agent.key.KeyObligationsMap;
 import com.ionic.sdk.agent.request.base.AgentRequestBase;
 import com.ionic.sdk.agent.service.IDC;
+import com.ionic.sdk.core.annotation.InternalUseOnly;
 import com.ionic.sdk.core.codec.Transcoder;
 import com.ionic.sdk.core.rng.CryptoRng;
 import com.ionic.sdk.core.value.Value;
@@ -12,15 +14,22 @@ import com.ionic.sdk.device.profile.DeviceProfile;
 import com.ionic.sdk.error.IonicException;
 import com.ionic.sdk.error.SdkData;
 import com.ionic.sdk.error.SdkError;
+import com.ionic.sdk.json.JsonSource;
 import com.ionic.sdk.json.JsonTarget;
 
 import javax.json.Json;
+import javax.json.JsonArray;
 import javax.json.JsonObject;
 import javax.json.JsonObjectBuilder;
+import javax.json.JsonString;
+import javax.json.JsonValue;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
@@ -29,6 +38,7 @@ import java.util.Properties;
  * <p>
  * ${IONIC_REPO_ROOT}/IonicAgents/SDK/ISAgentSDK/ISAgentLib/ISAgentTransactionUtil.cpp
  */
+@InternalUseOnly
 public final class AgentTransactionUtil {
 
     /**
@@ -36,6 +46,29 @@ public final class AgentTransactionUtil {
      * http://checkstyle.sourceforge.net/config_design.html#FinalClass
      */
     private AgentTransactionUtil() {
+    }
+
+    /**
+     * Resolve the {@link DeviceProfile} to be used for the indicated key ID.
+     *
+     * @param deviceProfiles the device enrollments to examine
+     * @param keyId          the key identifier to match
+     * @return the relevant {@link DeviceProfile} record for the request, or null if no {@link DeviceProfile} is
+     * found for the key
+     */
+    public static DeviceProfile getProfileForKeyId(final List<DeviceProfile> deviceProfiles, final String keyId) {
+        DeviceProfile deviceProfile = null;
+        for (DeviceProfile deviceProfileIt : deviceProfiles) {
+            final String keySpace = deviceProfileIt.getKeySpace();
+            if ((keyId != null) && (keySpace.length() < keyId.length()) && keyId.startsWith(keySpace)) {
+                if (deviceProfile == null) {
+                    deviceProfile = deviceProfileIt;
+                } else if (deviceProfile.getCreationTimestampSecs() < deviceProfileIt.getCreationTimestampSecs()) {
+                    deviceProfile = deviceProfileIt;
+                }
+            }
+        }
+        return deviceProfile;
     }
 
     /**
@@ -123,16 +156,17 @@ public final class AgentTransactionUtil {
     /**
      * Assemble the meta data associated with the request.
      *
-     * @param agent       the {@link com.ionic.sdk.key.KeyServices} implementation
-     * @param requestBase the client request
+     * @param protocol    the communications protocol of the {@link com.ionic.sdk.key.KeyServices} client
+     *                    (authentication, state)
+     * @param requestBase the KeyServices client request
      * @param fingerprint authentication data associated with the client state to be included in the request
      * @return a {@link JsonObject} to be incorporated into the request payload
      */
     public static JsonObject buildStandardJsonMeta(
-            final Agent agent, final AgentRequestBase requestBase, final Properties fingerprint) {
+            final ServiceProtocol protocol, final AgentRequestBase requestBase, final Properties fingerprint) {
         final JsonObjectBuilder builderMeta = Json.createObjectBuilder();
         // apply metadata from agent
-        for (Map.Entry<String, String> entry : agent.getMetadata().entrySet()) {
+        for (Map.Entry<String, String> entry : protocol.getMetadata().entrySet()) {
             JsonTarget.addNotNull(builderMeta, entry.getKey(), entry.getValue());
         }
         // apply metadata from request
@@ -145,7 +179,7 @@ public final class AgentTransactionUtil {
         }
         // apply SDK-provided metadata; https://en.wikipedia.org/wiki/User_agent
         JsonTarget.addNotNull(builderMeta, IDC.Metadata.IONIC_AGENT, SdkVersion.getAgentString());
-        JsonTarget.addNotNull(builderMeta, IDC.Metadata.USER_AGENT, agent.getConfig().getUserAgent());
+        JsonTarget.addNotNull(builderMeta, IDC.Metadata.USER_AGENT, protocol.getConfig().getUserAgent());
         JsonTarget.addNotNull(builderMeta, IDC.Metadata.OS_ARCH, System.getProperty(VM.Sys.OS_ARCH));
         JsonTarget.addNotNull(builderMeta, IDC.Metadata.OS_NAME, System.getProperty(VM.Sys.OS_NAME));
         JsonTarget.addNotNull(builderMeta, IDC.Metadata.OS_VERSION, System.getProperty(VM.Sys.OS_VERSION));
@@ -184,5 +218,34 @@ public final class AgentTransactionUtil {
             throw new IonicException(error, Value.join(VM.getEol(), SdkError.getErrorString(error), String.format(
                     "Null value detected (conversation ID %s, name %s).", cid, name)));
         }
+    }
+
+    /**
+     * Assemble a {@link KeyObligationsMap} object from the service response key data.
+     *
+     * @param jsonObject service response {@link JsonObject} representation of obligations data
+     * @return {@link KeyObligationsMap} representation of input data
+     * @throws IonicException on json parsing errors
+     */
+    public static KeyObligationsMap toObligations(final JsonObject jsonObject) throws IonicException {
+        final KeyObligationsMap keyObligationsMap = new KeyObligationsMap();
+        final Iterator<Map.Entry<String, JsonValue>> iterator = JsonSource.getIteratorNullable(jsonObject);
+        while (iterator.hasNext()) {
+            final Map.Entry<String, JsonValue> entry = iterator.next();
+            final List<String> valuesOut = new ArrayList<String>();
+            final String key = entry.getKey();
+            final JsonArray valuesIn = JsonSource.toJsonArray(entry.getValue(), key);
+            for (JsonValue valueIn : valuesIn) {
+                if (valueIn instanceof JsonString) {
+                    valuesOut.add(JsonSource.toString(valueIn));
+                } else {
+                    throw new IonicException(SdkError.ISAGENT_INVALIDVALUE, key);
+                }
+            }
+            if (!valuesOut.isEmpty()) {
+                keyObligationsMap.put(key, valuesOut);
+            }
+        }
+        return keyObligationsMap;
     }
 }

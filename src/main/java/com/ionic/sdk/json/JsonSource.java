@@ -10,6 +10,7 @@ import javax.json.JsonNumber;
 import javax.json.JsonObject;
 import javax.json.JsonString;
 import javax.json.JsonValue;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -35,6 +36,7 @@ public final class JsonSource {
      * @throws IonicException if the value is not of the expected JsonString type
      */
     public static JsonString toJsonString(final JsonValue jsonValue, final String message) throws IonicException {
+        SdkData.checkTrue(jsonValue != null, SdkError.ISAGENT_MISSINGVALUE, message);
         SdkData.checkTrue(jsonValue instanceof JsonString, SdkError.ISAGENT_INVALIDVALUE, message);
         return (JsonString) jsonValue;
     }
@@ -48,6 +50,7 @@ public final class JsonSource {
      * @throws IonicException if the value is not of the expected type
      */
     public static JsonObject toJsonObject(final JsonValue jsonValue, final String message) throws IonicException {
+        SdkData.checkTrue(jsonValue != null, SdkError.ISAGENT_MISSINGVALUE, message);
         SdkData.checkTrue(jsonValue instanceof JsonObject, SdkError.ISAGENT_INVALIDVALUE, message);
         return (JsonObject) jsonValue;
     }
@@ -61,6 +64,7 @@ public final class JsonSource {
      * @throws IonicException if the value is not of the expected type
      */
     public static JsonArray toJsonArray(final JsonValue jsonValue, final String message) throws IonicException {
+        SdkData.checkTrue(jsonValue != null, SdkError.ISAGENT_MISSINGVALUE, message);
         SdkData.checkTrue(jsonValue instanceof JsonArray, SdkError.ISAGENT_INVALIDVALUE, message);
         return (JsonArray) jsonValue;
     }
@@ -117,6 +121,19 @@ public final class JsonSource {
     }
 
     /**
+     * Get a iterator reference allowing traversal of the content of the input json object.
+     *
+     * @param jsonObject The input object
+     * @return an iterator with which the input object content may be traversed if non-null; otherwise
+     * an empty iterator
+     */
+    public static Iterator<Map.Entry<String, JsonValue>> getIteratorNullable(
+            final JsonObject jsonObject) {
+        final Iterator<Map.Entry<String, JsonValue>> emptyIterator = Collections.emptyIterator();
+        return (jsonObject == null) ? emptyIterator : jsonObject.entrySet().iterator();
+    }
+
+    /**
      * Get a iterator reference allowing traversal of the content of the input json array.
      *
      * @param jsonArray The input object
@@ -137,6 +154,16 @@ public final class JsonSource {
      */
     public static JsonValue.ValueType getValueType(final JsonObject jsonObject, final String name) {
         final JsonValue jsonValue = jsonObject.get(name);
+        return ((jsonValue == null) ? null : jsonValue.getValueType());
+    }
+
+    /**
+     * Get the "javax.json" data type of the specified JsonValue.
+     *
+     * @param jsonValue the item to query for type
+     * @return the data type of the specified child node if it exists; otherwise null
+     */
+    public static JsonValue.ValueType getValueType(final JsonValue jsonValue) {
         return ((jsonValue == null) ? null : jsonValue.getValueType());
     }
 
@@ -168,6 +195,7 @@ public final class JsonSource {
      */
     public static JsonObject getJsonObject(final JsonObject jsonObject, final String name) throws IonicException {
         final JsonValue jsonValue = jsonObject.get(name);
+        SdkData.checkTrue(jsonValue != null, SdkError.ISAGENT_MISSINGVALUE, name);
         SdkData.checkTrue(jsonValue instanceof JsonObject, SdkError.ISAGENT_INVALIDVALUE, name);
         return (JsonObject) jsonValue;
     }
@@ -182,6 +210,7 @@ public final class JsonSource {
      */
     public static JsonArray getJsonArray(final JsonObject jsonObject, final String name) throws IonicException {
         final JsonValue jsonValue = jsonObject.get(name);
+        SdkData.checkTrue(jsonValue != null, SdkError.ISAGENT_MISSINGVALUE, name);
         SdkData.checkTrue(jsonValue instanceof JsonArray, SdkError.ISAGENT_INVALIDVALUE, name);
         return (JsonArray) jsonValue;
     }
@@ -213,6 +242,7 @@ public final class JsonSource {
      */
     public static JsonString getJsonString(final JsonObject jsonObject, final String name) throws IonicException {
         final JsonValue jsonValue = jsonObject.get(name);
+        SdkData.checkTrue(jsonValue != null, SdkError.ISAGENT_MISSINGVALUE, name);
         SdkData.checkTrue(jsonValue instanceof JsonString, SdkError.ISAGENT_INVALIDVALUE, name);
         return (JsonString) jsonValue;
     }
@@ -227,6 +257,7 @@ public final class JsonSource {
      */
     public static JsonNumber getJsonNumber(final JsonObject jsonObject, final String name) throws IonicException {
         final JsonValue jsonValue = jsonObject.get(name);
+        SdkData.checkTrue(jsonValue != null, SdkError.ISAGENT_MISSINGVALUE, name);
         SdkData.checkTrue(jsonValue instanceof JsonNumber, SdkError.ISAGENT_INVALIDVALUE, name);
         return (JsonNumber) jsonValue;
     }
@@ -241,6 +272,17 @@ public final class JsonSource {
     public static String getString(final JsonObject jsonObject, final String name) {
         final JsonValue jsonValue = jsonObject.get(name);
         return ((jsonValue instanceof JsonString) ? ((JsonString) jsonValue).getString() : null);
+    }
+
+    /**
+     * Utility function to read the boolean value associated with the name within a json object.
+     *
+     * @param jsonObject the object from which to get the boolean
+     * @param name       the name of the boolean value
+     * @return the boolean value associated with the name, or "false" if not present
+     */
+    public static boolean getBoolean(final JsonObject jsonObject, final String name) {
+        return jsonObject.getBoolean(name, false);
     }
 
     /**

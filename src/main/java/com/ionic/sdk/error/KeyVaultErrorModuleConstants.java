@@ -3,13 +3,18 @@ package com.ionic.sdk.error;
 /**
  * Enumeration of error codes from the Ionic SDK Agent module.
  */
-@SuppressWarnings({"checkstyle:interfaceistype"})
+@SuppressWarnings({"checkstyle:interfaceistype"})  // Java JNI SDK API compatibility
 public interface KeyVaultErrorModuleConstants {
 
     /**
      * Success code.
      */
     int ISKEYVAULT_OK = 0;
+
+    /**
+     * KeyVault module error code range base.
+     */
+    int ISKEYVAULT_ERROR_BASE = 16000;
 
     /**
      * A general error occurred, but its specific problem is not represented with its own code.
@@ -59,6 +64,7 @@ public interface KeyVaultErrorModuleConstants {
      * but it is informing the caller that the requested update is not needed, and as such is ignored.
      * The determination is made by comparing key issuance UTC time
      * {@link com.ionic.sdk.keyvault.KeyVaultKey#getIssuedServerTimeUtcSeconds()}.
+     * @see com.ionic.sdk.core.date.DateTime
      */
     int ISKEYVAULT_KEY_UPDATE_IGNORED = 16007;
 

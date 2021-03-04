@@ -2,10 +2,11 @@
 
 [Ionic](https://ionic.com) Java software development kit (SDK).
 
-### Getting The SDK
+## Getting The SDK
 
-The built Java SDK JAR can be downloaded from [Ionic Downloads](https://dev-dashboard.ionic.com/#/downloads?tenant=5640bb430ea2684423e0655c).
-In general, you should not need to build the SDK from this source.
+Machina Java SDK releases (including source and unit tests) are published to the [Maven Central repository](https://repo.maven.apache.org/maven2/com/ionic/ionic-sdk/).
+
+Additional Maven Central publishing information can be found [here](https://mvnrepository.com/artifact/com.ionic/ionic-sdk).
 
 ## Developer documentation
 
@@ -14,6 +15,228 @@ Additional [Ionic developer](https://dev.ionic.com) resources are available, as 
 Visit [Getting Started Tutorial](https://dev.ionic.com/getting-started) for a guide.
 
 ## Release Notes
+
+### 2.9.0
+
+### New Features
+
+#### Deterministic Encryption Support
+The SDK has added support for deterministic encryption, allowing users to perform equality comparisons on encrypted 
+data values.
+
+#### Space-Efficient Encryption of Small Binary Data Values
+A new `BinaryCipher` family of cipher implementations has been added to the SDK.  These implementations allow for 
+the protection of small binary data values like the existing `ChunkCipher` implementations, but without the 
+additional space needed to encode ciphertexts using the base64 algorithm.
+
+#### GraalVM Support
+The SDK library JAR now includes additional metadata to enable usage in [GraalVM](https://www.graalvm.org/) 
+native binary applications.
+
+#### Support for Machina Identity Assertion Functions
+The class `com.ionic.sdk.agent.Agent` now includes additional APIs in support of Machina identity provider operations:
+- `CreateIdentityAssertion` allows a Machina-enabled device to generate an assertion, which can be used 
+to prove that it has a valid enrollment in the given keyspace.
+- `ValidateIdentityAssertion` allows a non-Machina-enabled device to verify the assertion.
+
+#### KeyServices Implementations
+Additional implementations of the interface `KeyServices` are available in the distributable 
+source (including the test source).
+- `KeyServicesMinimal` is a partial implementation of `KeyServices`, with default methods.
+- `KeyServicesSingleKey` wraps a single cryptography key, useful for deterministic encryption scenarios.
+- `LoopbackAgent` implements `KeyServices`, with a `KeyVaultBase` as a backing persistent store of key data.
+- `TestKeyServices` wraps access to a single fixed key, with no network access.  Useful in unit test scenarios.
+
+#### Additional Documentation Included with Release Distributable
+The SDK release distributable now includes the following documents, in markdown and html formats:
+- `README`, describing high-level SDK project functionality
+- `LICENSE`, providing the Machina license agreement for Ionic resources
+- `CHANGELOG`, with line items providing summary information about the issues included in each release
+- `RELEASE_NOTES`, detailing the features and fixes included in the release 
+
+#### Documentation Improvements
+- Additional detail describes the data model associated with the APIs `Agent.loadProfiles()` 
+and `Agent.saveProfiles()`.
+
+### Corrected Issues
+- `GetKey` transaction responses now include any `KeyObligations` specified by the Machina service.
+- Extraneous information about the data associated with a serialized `ProfilePersistor` is now logged at an 
+appropriate log level.
+- `DeviceProfilePersistorPassword` now documents the minimum password length requirement.
+
+### 2.8.0
+
+#### Abstract Class KeyServicesMinimal
+The new class ```KeyServicesMinimal``` has been added, providing default implementations of most ```KeyServices```
+interfaces.  This enables users to provide custom KeyServices implementations with minimal boilerplate code.
+
+#### BatchCipher Implementations
+The new abstract class ```BatchCipherAbstract``` has been added, with implementations using the AES-CTR and AES-GCM
+algorithms.  Users may employ these classes to perform cryptography operations on discrete sets of logically related
+plaintexts (for example, multiple columns of a single database table row).
+
+#### Documentation Improvements
+- Additional detail describes the use and purpose of the ```GetKeys``` external id data structures.
+- The error code definitions are linked in more places within the API documentation.
+- Expected return values from ```get``` operations are better documented, detailing expectations with regard to null
+values and exceptions.
+
+#### Code Improvements
+- Additional SDK classes implement the ```java.io.Serializable``` interface, facilitating usage within external
+frameworks such as [Apache Spark](https://spark.apache.org/).
+- The source code has been updated to comply with up-to-date versions of the code quality tools
+[checkstyle](https://checkstyle.sourceforge.io/), [SpotBugs](https://spotbugs.github.io/), and
+[pmd](https://pmd.github.io/).
+- Additional trace has been added to help diagnose issues with the available ```ProfilePersistor``` implementations.
+- Provide method to specify a desired quantity of keys that match an External ID in a ```GetKeysRequest```.
+
+#### Service Endpoint Updates
+- All SDK calls to the Machina service layer use the v2.4 service HTTP endpoints.
+
+### 2.7.0
+
+### New Features
+
+#### ProfilePersistor file specification version 1.1
+The Machina ```ProfilePersistor``` file format version 1.1 (currently implemented in the C++ SDK) is now available in 
+the Java SDK.  This file format includes a JSON metadata header in the file content.
+
+#### ProfilePersistor (DPAPI) default filesystem location
+The DPAPI implementation of the Machina ```ProfilePersistor``` has been updated to use the same algorithm as 
+the C++ SDK for determining the default filesystem location of DPAPI profiles.
+
+#### ProfilePersistor (DPAPI) local machine context
+The DPAPI addon library now handles usage in the context of a restricted OS user.  The LOCAL_MACHINE context is now 
+available when using ```DeviceProfilePersistorWindows``` by constructing it with parameter (isUser=false).
+- ```com.ionic.sdk.addon.dpapi.device.profile.persistor.DeviceProfilePersistorWindows(boolean isUser)```
+
+#### Keyspace Name Service additions
+Initial support for Machina Keyspace Name Service (KNS) has been added.
+- Calls to the API ```Agent.getKeyspace()``` are supported when using an ```Agent``` with no profiles.
+- The API ```Agent.updateProfileFromKNS()``` has been added.  This call will update a profile with the latest URL 
+available from the KNS provider. You may also pass in a different KNS provider URL instead of using the Ionic server.
+
+#### Documentation Improvements
+- Additional detail provided for common use cases:
+  - cryptography algorithm choice (AES-CTR, AES-GCM),
+  - chunk cryptography (strings),
+  - file cryptography (binary content),
+  - key operations (key create, key fetch),
+  - client accessor configuration (HTTP headers),
+  - persistence of client device profile information (plaintext, protected).
+- Sample code snippets included in documentation for many user-facing code classes.
+- Contextually relevant links provided from code to Machina developer website.
+- Javadoc generation corrected to provide links to classes used by the SDK (for example, to the Java 
+Runtime Environment).
+- References corrected to dependencies on Bouncy Castle library.
+- Clarifications added to treatment of Machina client and service time zones.
+- Usage information added to the "overview summary" front page of the Javadoc.
+
+#### Machina service transaction code cleanup
+Machina service transaction code has been refactored for simplicity and consistency.
+
+#### Agent copy constructor
+A copy constructor for the class ```com.ionic.sdk.agent.Agent``` has been implemented, in order to improve 
+interface consistency with the C++ reference implementation.  The copy constructor copies the in-memory state of an 
+existing Agent instance, so that filesystem access during initialization is unnecessary. 
+
+#### IonicException
+The class ```IonicException``` has been enhanced to provide the following additional information: version, build, 
+git-commit, and CID.  This additional information will help diagnose and address SDK issues.
+
+#### DeviceProfile validity checks
+The SDK alerts on a user attempt to perform an service operation using an invalid ```DeviceProfile```.  This includes
+supplying shared secret keys in the DeviceProfile with an invalid length.
+
+### Known Issues
+- None
+
+### Corrected Issues
+- Correct issue with handling of key fetch failure (C++ reference implementation consistency).
+
+### Deprecations
+| Old | New |
+| --- | --- |
+| ```com.ionic.sdk.agent.Agent.clone()``` | ```com.ionic.sdk.agent.Agent(Agent)``` |
+
+### Additional Notes
+- None
+
+### 2.6.1
+
+### New Features
+- No new software features have been added to this release.
+
+### Documentation Updates 
+- The process of documentation generation has been updated to include additional HTML meta tags, in order to improve 
+the search engine optimization (SEO) posture of the SDK documentation.
+
+### 2.6.0
+
+### New Features
+
+#### Use JRE Built-In Provider by Default
+The Java interface [java.security.Provider](https://docs.oracle.com/javase/7/docs/api/java/security/Provider.html) 
+represents a "provider" for the Java Security API.  Implementations include support for cryptography primitives, such
+as algorithms and cryptography key management.  The JRE includes a built-in provider.
+
+In versions 2.0 through 2.5, the Java SDK used the third 
+party [Bouncy Castle](https://www.bouncycastle.org/java.html) library implementation of cryptography algorithms.  In 
+version 2.6, the SDK uses the built-in provider by default.  This change eliminates a project dependency, avoids some 
+compatibility problems, and reduces the memory, disk, and network footprint of Java SDK-enabled applications.
+
+#### New Constructor for Agent Class
+An additional constructor has been added for the class ```com.ionic.sdk.agent.Agent```.  This constructor accepts the 
+serialized representation of the JSON associated with a set of ```com.ionic.sdk.device.profile.DeviceProfile``` 
+objects.  This constructor facilitates use of the SDK in Amazon Web Services Lambda functions, and other cloud contexts. 
+
+#### Support for Device Enrollment Using *Ionic Authentication* Enrollment Method
+Software developers may use the [Machina Start for Free](https://ionic.com/start-for-free/) workflow to provision a 
+dedicated web service tenant, allowing them to try out the Machina platform and engine.  The *Start for Free* program 
+uses the *Ionic Authentication* enrollment method by default to enroll new devices.
+
+The class ```com.ionic.sdk.device.create.EnrollIonicAuth``` provides SDK *Start for Free* users with a means to enroll 
+devices.  See the github sample 
+[Create Profile Start for Free](https://github.com/IonicDev/samples/tree/master/java/create-profile-start-for-free) 
+for more information.
+
+### Known Issues
+- None
+
+### Corrected Issues
+- The Maven project descriptor files have been adjusted to provide correct information.
+- The build distributable has been corrected to include missing build content.
+- Several incompatibilities between various Bouncy Castle library versions and various JREs have been addressed.
+- The ```com.ionic.sdk.agent.Agent.clone()``` method has been corrected to copy all source data to the new Object.
+
+### Additional Notes
+
+#### Bouncy Castle Compatibility
+The cryptography provider built into the JRE is used by default in Java SDK 2.6.  To use the Bouncy Castle cryptography 
+provider, add the following statement in your code to execute in your process before any usage of Ionic cryptography:
+```
+com.ionic.sdk.agent.AgentSdk.initialize(new org.bouncycastle.jce.provider.BouncyCastleProvider());
+```
+
+If you choose to use the Bouncy Castle provider in your application, please make sure to declare the dependency as 
+needed for your development / runtime environment.  The Maven declaration is as follows:
+```
+<dependency>
+    <groupId>org.bouncycastle</groupId>
+    <artifactId>bcprov-jdk15to18</artifactId>
+    <version>1.63</version>
+</dependency>
+```
+
+Due to size constraints, and to the complexity inherent in a project dependency, we recommend the use of the 
+Bouncy Castle library only if it is needed by your application.
+
+- If your JRE is version 11+, use the built in cryptography provider.
+- If your JRE is version 8+, and if enrollment is handled external to your application, use the built in cryptography 
+provider.
+- If your JRE is version 8+, and if enrollment is handled by your application, use the Bouncy Castle cryptography 
+provider.
+- If your JRE is version 7, use the Bouncy Castle cryptography provider.
 
 ### 2.5.0
 

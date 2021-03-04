@@ -236,6 +236,7 @@ public class KeyVaultEncryptedFile {
      * @param keyObject Parsed JsonObject whose individual values are all arrays of strings
      * @return KeyObligationsMap
      * @throws IonicException on Json parsing errors
+     * @see com.ionic.sdk.agent.transaction.AgentTransactionUtil#toObligations(JsonObject)
      */
     private KeyObligationsMap readJsonMapOfObligations(final JsonObject keyObject) throws IonicException  {
 
@@ -484,9 +485,6 @@ public class KeyVaultEncryptedFile {
         System.arraycopy(dataBytes, 0, header, 0, headerDelimIndex);
 
         // parse and read the JSON header
-        final String keyVaultIdFromHeader = null;
-        final String cipherIdFromHeader = null;
-        final String fileVersionFromHeader = null;
         readJsonHeader(Transcoder.utf8().encode(header), keyVaultId,
                         cipher.getId(), FILE_VERSION_LATEST);
 

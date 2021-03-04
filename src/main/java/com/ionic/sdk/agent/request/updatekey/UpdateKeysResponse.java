@@ -6,11 +6,22 @@ import com.ionic.sdk.agent.key.KeyObligationsMap;
 import com.ionic.sdk.agent.request.base.AgentResponseBase;
 import com.ionic.sdk.core.value.Value;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Represents the output for an Agent.updateKeys() request.
+ * Represents the output for a request to the Ionic Machina
+ * Tools {@link com.ionic.sdk.agent.Agent#updateKeys(UpdateKeysRequest)} API call.
+ * <p>
+ * The response will contain updated information about the {@link Key} objects involved in the request.
+ * <p>
+ * The UpdateKey / UpdateKeys family of APIs allow for the mutable attributes associated with existing AES keys to
+ * be updated.  Subsequent GetKey / GetKeys calls allow for the retrieval of the keys, via the key id, and receive any
+ * updates to the key's mutable attributes.
+ * <p>
+ * See <a href='https://dev.ionic.com/sdk/tasks/update-key' target='_blank'>Machina Developers</a> for
+ * more information about the UpdateKey operation.
  */
 public class UpdateKeysResponse extends AgentResponseBase {
 
@@ -66,10 +77,10 @@ public class UpdateKeysResponse extends AgentResponseBase {
     }
 
     /**
-     * Retrieve the key response with the matching id.
+     * Retrieve the {@link UpdateKeysResponse.Key} record associated with the specified key tag.
      *
-     * @param id an identifier to correlate the response
-     * @return the matching key response
+     * @param id a Machina key tag
+     * @return the matching {@link UpdateKeysResponse.Key} record, or <code>null</code> if not found
      */
     public final UpdateKeysResponse.Key getKey(final String id) {
         UpdateKeysResponse.Key key = null;
@@ -83,10 +94,10 @@ public class UpdateKeysResponse extends AgentResponseBase {
     }
 
     /**
-     * Retrieve the key error with the matching id.
+     * Retrieve the {@link UpdateKeysResponse.IonicError} record associated with the specified key tag.
      *
-     * @param id an identifier to correlate the response
-     * @return the matching error response
+     * @param id a Machina key tag
+     * @return the matching {@link UpdateKeysResponse.IonicError} record, or <code>null</code> if not found
      */
     public final UpdateKeysResponse.IonicError getError(final String id) {
         UpdateKeysResponse.IonicError error = null;
@@ -99,10 +110,13 @@ public class UpdateKeysResponse extends AgentResponseBase {
         return error;
     }
 
+    /** Value of serialVersionUID from maven coordinates "com.ionic:ionic-sdk:2.8.0". */
+    private static final long serialVersionUID = 7416884005935984946L;
+
     /**
      * Represents a discrete key response object in the context of a {@link UpdateKeysResponse}.
      */
-    public static class Key extends AgentKey {
+    public static class Key extends AgentKey implements Serializable {
 
         /**
          * The device id associated with the creation request.
@@ -204,12 +218,15 @@ public class UpdateKeysResponse extends AgentResponseBase {
         public final void setDeviceId(final String deviceId) {
             this.deviceId = Value.defaultOnEmpty(deviceId, "");
         }
+
+        /** Value of serialVersionUID from maven coordinates "com.ionic:ionic-sdk:2.8.0". */
+        private static final long serialVersionUID = -3431416299803402371L;
     }
 
     /**
      * Represents a discrete error response object in the context of a {@link UpdateKeysResponse}.
      */
-    public static class IonicError {
+    public static class IonicError implements Serializable {
 
         /**
          * A String denoting the id of the key.
@@ -310,5 +327,8 @@ public class UpdateKeysResponse extends AgentResponseBase {
         public final void setServerMessage(final String serverMessage) {
             this.serverMessage = serverMessage;
         }
+
+        /** Value of serialVersionUID from maven coordinates "com.ionic:ionic-sdk:2.8.0". */
+        private static final long serialVersionUID = -4176159213618554197L;
     }
 }

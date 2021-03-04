@@ -7,7 +7,19 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Represents the input for an Agent.createKeys() request.
+ * Represents the input for a request to the Ionic Machina
+ * Tools {@link com.ionic.sdk.agent.Agent#updateKeys(UpdateKeysRequest)} API call.
+ * <p>
+ * The request will contain information about {@link Key} objects, which specify the cryptography key objects to be
+ * updated, as well as attributes that should be associated with the specified keys.  {@link UpdateKeysRequest} may
+ * contain 1..n {@link Key} objects.
+ * <p>
+ * The UpdateKey / UpdateKeys family of APIs allow for the mutable attributes associated with existing AES keys to
+ * be updated.  Subsequent GetKey / GetKeys calls allow for the retrieval of the keys, via the key id, and receive any
+ * updates to the key's mutable attributes.
+ * <p>
+ * See <a href='https://dev.ionic.com/sdk/tasks/update-key' target='_blank'>Machina Developers</a> for
+ * more information about the UpdateKey operation.
  */
 public class UpdateKeysRequest extends AgentRequestBase {
 
@@ -63,11 +75,13 @@ public class UpdateKeysRequest extends AgentRequestBase {
     }
 
     /**
-     * Retrieve the key request with the matching keyId.
+     * Retrieve the {@link UpdateKeysRequest.Key} record associated with the specified key tag.
      *
-     * @param keyId an identifier to correlate the request
-     * @return the matching key request
+     * @param keyId a Machina key tag
+     * @return the matching {@link UpdateKeysRequest.Key} record, or <code>null</code> if not found
+     * @deprecated Please migrate usages to the replacement {@link #getKey(String)}
      */
+    @Deprecated
     public final Key findKey(final String keyId) {
         Key key = null;
         for (Key keyRequest : keyRequests) {
@@ -80,10 +94,10 @@ public class UpdateKeysRequest extends AgentRequestBase {
     }
 
     /**
-     * Retrieve the key request with the matching keyId.
+     * Retrieve the {@link UpdateKeysRequest.Key} record associated with the specified key tag.
      *
-     * @param keyId an identifier to correlate the request
-     * @return the matching key request
+     * @param keyId a Machina key tag
+     * @return the matching {@link UpdateKeysRequest.Key} record, or <code>null</code> if not found
      */
     public final Key getKey(final String keyId) {
         Key key = null;
@@ -95,6 +109,9 @@ public class UpdateKeysRequest extends AgentRequestBase {
         }
         return key;
     }
+
+    /** Value of serialVersionUID from maven coordinates "com.ionic:ionic-sdk:2.8.0". */
+    private static final long serialVersionUID = 9157502748079517417L;
 
     /**
      * Represents a discrete key request object in the context of a {@link UpdateKeysRequest}.
@@ -152,5 +169,8 @@ public class UpdateKeysRequest extends AgentRequestBase {
         public final boolean getForceUpdate() {
             return forceUpdate;
         }
+
+        /** Value of serialVersionUID from maven coordinates "com.ionic:ionic-sdk:2.8.0". */
+        private static final long serialVersionUID = 1512173787583075644L;
     }
 }

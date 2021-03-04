@@ -10,7 +10,30 @@ import com.ionic.sdk.error.SdkError;
 import com.ionic.sdk.key.KeyServices;
 
 /**
- * Wrapper object used to abstract Ionic cryptography operations.
+ * Ionic Machina Tools chunk crypto implementation.  This wrapper object can be used to abstract Ionic
+ * cryptography operations.  Instances of this class use underlying Machina chunk cipher implementations to perform
+ * operations:
+ * <ul>
+ * <li>encryption operations are performed using the default cipher: {@link ChunkCipherV2},</li>
+ * <li>decryption operations are performed using the cipher format used to produce the ciphertext.</li>
+ * </ul>
+ * <p>
+ * Sample:
+ * <pre>
+ * public final void testChunkCipherAuto_EncryptDecryptString() throws IonicException {
+ *     final KeyServices keyServices = IonicTestEnvironment.getInstance().getKeyServices();
+ *     final String plainText = "Hello, Machina!";
+ *     final ChunkCipherAbstract chunkCipher = new ChunkCipherAuto(keyServices);
+ *     final String cipherText = chunkCipher.encrypt(plainText);
+ *     final ChunkCryptoChunkInfo chunkInfo = chunkCipher.getChunkInfo(cipherText);
+ *     Assert.assertEquals(ChunkCipherV2.ID, chunkInfo.getCipherId());
+ *     final String plainTextRecover = chunkCipher.decrypt(cipherText);
+ *     Assert.assertEquals(plainText, plainTextRecover);
+ * }
+ * </pre>
+ * <p>
+ * See <a href='https://dev.ionic.com/sdk/formats/chunk' target='_blank'>Machina Developers</a> for more information
+ * on the different chunk crypto data formats.
  */
 public class ChunkCipherAuto extends ChunkCipherAbstract {
 
@@ -115,17 +138,10 @@ public class ChunkCipherAuto extends ChunkCipherAbstract {
         return chunkCipherDefault.encryptInternal(plainText, encryptAttributes);
     }
 
-    /**
-     * Encrypt some text, using Ionic infrastructure to abstract away the key management and cryptography.
-     *
-     * @param key       the Ionic key associated with the ciphertext
-     * @param plainText some data to be encrypted
-     * @return the Ionic encoded encrypted representation of the input
-     * @throws IonicException on cryptography errors
-     */
     @Override
-    protected final String encryptInternal(final AgentKey key, final byte[] plainText) throws IonicException {
-        return chunkCipherDefault.encryptInternal(key, plainText);
+    protected final String encryptInternal(final AgentKey key, final byte[] plainText,
+                                           final ChunkCryptoEncryptAttributes encryptAttributes) throws IonicException {
+        return chunkCipherDefault.encryptInternal(key, plainText, encryptAttributes);
     }
 
     /**

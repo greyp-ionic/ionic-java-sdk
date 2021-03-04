@@ -12,7 +12,7 @@ public interface CryptoErrorModuleConstants {
      int ISCRYPTO_OK = 0;
 
     /**
-     * Crypto module range base.
+     * Crypto module error code range base.
      */
      int ISCRYPTO_ERROR_BASE = 50000;
 
@@ -39,8 +39,10 @@ public interface CryptoErrorModuleConstants {
      int ISCRYPTO_BAD_INPUT = 50004;
 
     /**
-     * CryptoAbstract module has not been initialized.
-     * The crypto module was used before being initialized via cryptoImpl_initialize().
+     * Crypto module has not been initialized.
+     * <p>
+     * This error code is present in order to maintain compatibility with the C++ SDK.  It is unused
+     * in this language implementation.
      */
      int ISCRYPTO_NO_INIT = 50005;
 
@@ -69,11 +71,38 @@ public interface CryptoErrorModuleConstants {
      * A seed overflow occurred during RSA private key generation.
      * During RSA private key generation, it is possible for the random seed to overflow
      * (although extremely unlikely).  In that situation, RSA key generation is aborted and the
-     * ISCRYPTO_RSA_SEED_OVERFLOW error code is returned.
+     * ISCRYPTO_SEED_OVERFLOW error code is returned.
      * <p>
      * When this error is encountered, it is recommended to simply try again.
+     * <p>
+     * This error code is present in order to maintain compatibility with the C++ SDK.  It is unused
+     * in this language implementation.
      */
      int ISCRYPTO_SEED_OVERFLOW = 50009;
+
+    /**
+     * This is a reserved error code that was used in development at one point and then deprecated.
+     */
+     int ISCRYPTO_NOT_SUPPORTED = 50010;
+
+    /**
+     * This is a reserved error code that was used in development at one point and then deprecated.
+     */
+     int ISCRYPTO_FATAL_ERROR = 50011;
+
+    /**
+     * This error indicates the sufficient entropy test has failed on a Linux install. The test
+     * reads the entropy stream and waits to see if it is quickly refilled. A default Linux install
+     * will fail the test even if there is sufficient entropy initially available. The Ionic SDK
+     * requires 'haveged' or some similar solution including mapping /dev/urandom into /dev/random.
+     */
+     int ISCRYPTO_LIMITED_ENTROPY = 50012;
+
+    /**
+     * A file failed to open, seek, or read/write.  This normally happens because the file path provided
+     * does not exist or it is not accessible due to lack of permission.
+     */
+     int ISCRYPTO_FILE_ERROR = 50013;
 
     /**
      * Fatal error.

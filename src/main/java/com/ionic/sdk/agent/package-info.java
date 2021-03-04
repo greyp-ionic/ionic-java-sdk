@@ -14,24 +14,31 @@
  * registered.
  * <ul>
  * <li>"SunJCE" - the default provider, built into the JRE</li>
- * <li>"BC" - the BouncyCastle provider, a popular third-party library</li>
+ * <li>"BC" - the Bouncy Castle provider, a popular third-party library</li>
  * </ul>
  * <p>
  * Any library to be used by the Ionic SDK must conform to the JCE architecture described
- * <a href='https://docs.oracle.com/javase/7/docs/technotes/guides/security/crypto/CryptoSpec.html#Architecture'>
+ * <a href='https://docs.oracle.com/javase/7/docs/technotes/guides/security/crypto/CryptoSpec.html#Architecture'
+ * target='_blank'>
  * here</a>.  In particular, instantiation of cryptography primitives is achieved through the use of a
  * 'getInstance()' call on the desired interface.
  * <pre>    md = MessageDigest.getInstance("SHA-256")</pre>
  * <p>
- * If no specific provider is specified, the Ionic SDK default is to automatically add the BouncyCastle provider, and
- * to use any implementation of the requested cryptography primitive that is available to the JCE.  If a provider is
+ * In SDK versions 2.0 - 2.5, the provider "org.bouncycastle.jce.provider.BouncyCastleProvider" was implicitly
+ * registered to the JRE on first use of Ionic cryptography.  In SDK versions 2.6+, if usage of Bouncy Castle
+ * cryptography is desired, Bouncy Castle must be explicitly registered (using the API
+ * {@link com.ionic.sdk.agent.AgentSdk#initialize(java.security.Provider)} prior to any other usage of the Ionic SDK.
+ * <p>
+ * If no specific {@link java.security.Provider} is specified in the API call
+ * {@link com.ionic.sdk.agent.AgentSdk#initialize(java.security.Provider)}, the Ionic SDK default is to use all
+ * providers registered to the JRE to satisfy a request for a cryptography primitive.  If a provider is
  * specified, it must implement any requested cryptography primitive.  Known limitations:
  * <ul>
  * <li>JRE 7 has no implementation of the AES GCM algorithm.  This is used by
  * {@link com.ionic.sdk.agent.cipher.chunk.ChunkCipherV3} and
  * {@link com.ionic.sdk.agent.cipher.file.GenericFileCipher} version 1.3.</li>
- * <li>No released JRE has an implementation of the RSA signature algorithm used by the Ionic SDK.  This algorithm is
- * used during  the API call
+ * <li>JRE 7-10 have no implementation of the RSA signature algorithm used by the Ionic SDK.  This algorithm is
+ * used during the API call
  * {@link com.ionic.sdk.agent.Agent#createDevice(com.ionic.sdk.agent.request.createdevice.CreateDeviceRequest)}.</li>
  * </ul>
  */

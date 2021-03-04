@@ -5,6 +5,13 @@ import com.ionic.sdk.agent.data.MetadataHolder;
 import com.ionic.sdk.agent.data.MetadataMap;
 import com.ionic.sdk.agent.hfp.Fingerprint;
 import com.ionic.sdk.agent.key.KeyAttributesMap;
+import com.ionic.sdk.agent.request.createassertion.CreateIdentityAssertionRequest;
+import com.ionic.sdk.agent.request.createassertion.CreateIdentityAssertionResponse;
+import com.ionic.sdk.agent.request.createassertion.CreateIdentityAssertionTransaction;
+import com.ionic.sdk.agent.request.createassertion.IdentityAssertionValidator;
+import com.ionic.sdk.agent.request.createassertion.data.AssertionUtils;
+import com.ionic.sdk.agent.request.createassertion.data.IdentityAssertion;
+import com.ionic.sdk.agent.request.createassertion.data.PubkeyResolver;
 import com.ionic.sdk.agent.request.createdevice.CreateDeviceRequest;
 import com.ionic.sdk.agent.request.createdevice.CreateDeviceResponse;
 import com.ionic.sdk.agent.request.createdevice.CreateDeviceTransaction;
@@ -14,6 +21,9 @@ import com.ionic.sdk.agent.request.createkey.CreateKeysTransaction;
 import com.ionic.sdk.agent.request.getkey.GetKeysRequest;
 import com.ionic.sdk.agent.request.getkey.GetKeysResponse;
 import com.ionic.sdk.agent.request.getkey.GetKeysTransaction;
+import com.ionic.sdk.agent.request.getkeyspace.GetKeyspaceRequest;
+import com.ionic.sdk.agent.request.getkeyspace.GetKeyspaceResponse;
+import com.ionic.sdk.agent.request.getkeyspace.GetKeyspaceTransaction;
 import com.ionic.sdk.agent.request.getresources.GetResourcesRequest;
 import com.ionic.sdk.agent.request.getresources.GetResourcesResponse;
 import com.ionic.sdk.agent.request.getresources.GetResourcesTransaction;
@@ -24,11 +34,17 @@ import com.ionic.sdk.agent.request.updatekey.UpdateKeysRequest;
 import com.ionic.sdk.agent.request.updatekey.UpdateKeysResponse;
 import com.ionic.sdk.agent.request.updatekey.UpdateKeysTransaction;
 import com.ionic.sdk.agent.service.IDC;
+import com.ionic.sdk.agent.transaction.AgentTransactionUtil;
 import com.ionic.sdk.core.date.DateTime;
+import com.ionic.sdk.core.value.Value;
+import com.ionic.sdk.device.DeviceUtils;
+import com.ionic.sdk.device.create.saml.DeviceEnrollment;
 import com.ionic.sdk.device.profile.DeviceProfile;
+import com.ionic.sdk.device.profile.persistor.DeviceProfiles;
 import com.ionic.sdk.device.profile.persistor.ProfilePersistor;
 import com.ionic.sdk.error.IonicException;
 import com.ionic.sdk.error.IonicServerException;
+import com.ionic.sdk.error.SdkData;
 import com.ionic.sdk.error.SdkError;
 import com.ionic.sdk.key.KeyServices;
 
@@ -36,8 +52,139 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The main point of interaction with the Ionic SDK. This class performs all client/server communications with
- * Ionic.com.
+ * The main point of interaction with the Ionic Machina Tools SDK.  {@link Agent} instances provide APIs to perform
+ * the following Machina operations:
+ * <ul>
+ * <li>Create Key</li>
+ * <li>Get Key</li>
+ * <li>Update Key</li>
+ * <li>Get Resources</li>
+ * <li>Log Messages</li>
+ * <li>Create Device</li>
+ * </ul>
+ * <p>
+ * For this {@link KeyServices} implementation, these operations involve a request to a remote Machina key
+ * server.  On failure of this operation, an {@link IonicException} is thrown, which contains additional data
+ * about the failure.
+ * <p>
+ * {@link Agent} objects may be instantiated in a few different ways.
+ * <ul>
+ * <li>{@link Agent#Agent()} creates a fresh Agent instance with default configuration (uninitialized).</li>
+ * <li>{@link Agent#Agent(AgentConfig)} creates a fresh Agent instance with custom configuration (uninitialized).</li>
+ * <li>{@link Agent#Agent(ProfilePersistor)} creates a fresh Agent instance with default configuration, and using
+ * the {@link DeviceProfile} objects associated with the specified {@link ProfilePersistor} (initialized)</li>
+ * <li>{@link Agent#Agent(DeviceProfiles)} creates a fresh Agent instance from a set of
+ * in-memory {@link DeviceProfile} objects (initialized)</li>
+ * </ul>
+ * <p>
+ * Uninitialized {@link Agent} instances should be initialized using {@link Agent#initialize()} before attempting any
+ * service interactions.
+ * <p>
+ * {@link Agent} instances interact with Machina via associated {@link DeviceProfile} objects.  These are loaded into
+ * the Agent during construction, or through the {@link #loadProfiles(ProfilePersistor)} API.  DeviceProfile
+ * objects may be added to the working set of the Agent through the {@link #addProfile(DeviceProfile)} API.  Updates to
+ * the DeviceProfile working set may be saved through the {@link #saveProfiles(ProfilePersistor)} API.
+ * <p>
+ * Implementations of {@link ProfilePersistor} are typically backed by a file on a filesystem available to
+ * the {@link Agent} process.  The agent maintains an in-memory cache of {@link DeviceProfile} objects for use during
+ * cryptography operations.  The API {@link #loadProfiles(ProfilePersistor)} causes the agent cache
+ * of DeviceProfile objects to be replaced with those retrieved from the file.  The
+ * API {@link #saveProfiles(ProfilePersistor)} causes the serialized ProfilePersistor file to be replaced
+ * with the records from the agent cache.  No internal reference to a ProfilePersistor is maintained by
+ * the agent.
+ * <p>
+ * Machina Tools SDK for Java does not have the concept of a default ProfilePersistor, so use of
+ * the {@link #loadProfiles()} and {@link #saveProfiles()} APIs will cause an {@link IonicException} to be thrown.
+ * <p>
+ * Sample (simple agent instantiation and usage):
+ * <pre>
+ * public final void testAgent_Initialize_CreateKey_GetKey() throws IonicException {
+ *     final ProfilePersistor profilePersistor = IonicTestEnvironment.getInstance().getProfilePersistor();
+ *     final Agent agent = new Agent(profilePersistor);
+ *     final CreateKeysResponse createKeysResponse = agent.createKey();
+ *     final AgentKey keyCreate = createKeysResponse.getFirstKey();
+ *     final GetKeysResponse getKeysResponse = agent.getKey(keyCreate.getId());
+ *     final AgentKey keyGet = getKeysResponse.getKeys().iterator().next();
+ *     Assert.assertEquals(keyCreate.getId(), keyGet.getId());
+ * }
+ * </pre>
+ * <p>
+ * Sample (set custom DeviceProfile):
+ * <pre>
+ * public final void testAgent_InitializeFromDeviceProfile() throws IonicException {
+ *     final ProfilePersistor profilePersistor = IonicTestEnvironment.getInstance().getProfilePersistor();
+ *     final Agent agentLoadProfiles = new Agent(profilePersistor);
+ *     final DeviceProfile activeProfile = agentLoadProfiles.getActiveProfile();
+ *     // instantiate blank Agent
+ *     final Agent agent = new Agent();
+ *     agent.initializeWithoutProfiles();
+ *     agent.addProfile(activeProfile, true);
+ *     final CreateKeysResponse createKeysResponse = agent.createKey();
+ *     final AgentKey keyCreate = createKeysResponse.getFirstKey();
+ *     final GetKeysResponse getKeysResponse = agent.getKey(keyCreate.getId());
+ *     final AgentKey keyGet = getKeysResponse.getKeys().iterator().next();
+ *     Assert.assertEquals(keyCreate.getId(), keyGet.getId());
+ * }
+ * </pre>
+ * <p>
+ * Sample (set custom HTTP "User-Agent" header):
+ * <pre>
+ * public final void testAgent_InitializeFromAgentConfig() throws IonicException {
+ *     final AgentConfig agentConfig = new AgentConfig();
+ *     agentConfig.setUserAgent("Custom Machina HTTP User Agent");
+ *     final Agent agent = new Agent(agentConfig);
+ *     final ProfilePersistor profilePersistor = IonicTestEnvironment.getInstance().getProfilePersistor();
+ *     agent.initialize(profilePersistor);
+ *     final CreateKeysResponse createKeysResponse = agent.createKey();
+ *     Assert.assertEquals(1, createKeysResponse.getKeys().size());
+ * }
+ * </pre>
+ * <p>
+ * Keyspace Name Service (KNS), based on DNS, allows Machina clients to resolve API endpoint information by
+ * providing a valid four-character keyspace ID.  KNS can be used to update existing {@link DeviceProfile} records (for
+ * instance, in the case of a Machina tenant migration).  Updates may be persisted to the filesystem via a subsequent
+ * call to {@link Agent#saveProfiles(ProfilePersistor)}.
+ * <p>
+ * Sample (update in-memory copy of active profile's server string, loaded from filesystem):
+ * <pre>
+ * public final void testAgent_KNS_UpdateActiveProfile_FromProfilePersistor() throws IonicException {
+ *     final ProfilePersistor profilePersistor = IonicTestEnvironment.getInstance().getProfilePersistor();
+ *     final Agent agent = new Agent(profilePersistor);
+ *     final String deviceId = agent.getActiveProfile().getDeviceId();
+ *     final String server = agent.getActiveProfile().getServer();
+ *     agent.updateProfileFromKNS(deviceId, "https://api.ionic.com");
+ *     final String serverUpdate = agent.getActiveProfile().getServer();
+ *     Assert.assertEquals(server, serverUpdate);  // url should be the same
+ *     Assert.assertNotSame(server, serverUpdate);  // the string reference should be updated
+ * }
+ * </pre>
+ * <p>
+ * Sample (update in-memory copy of active profile's server string, loaded from string):
+ * <pre>
+ * public final void testAgent_KNS_UpdateActiveProfile_FromJsonString() throws IonicException, IOException {
+ *     final File file = IonicTestEnvironment.getInstance().getFileProfilePersistor();
+ *     Assert.assertNotNull(file);
+ *     final String json = Transcoder.utf8().encode(Stream.read(file));
+ *     final Agent agent = new Agent(new DeviceProfiles(json));
+ *     final String deviceId = agent.getActiveProfile().getDeviceId();
+ *     final String server = agent.getActiveProfile().getServer();
+ *     agent.updateProfileFromKNS(deviceId, "https://api.ionic.com");
+ *     final String serverUpdate = agent.getActiveProfile().getServer();
+ *     Assert.assertEquals(server, serverUpdate);  // url should be the same
+ *     Assert.assertNotSame(server, serverUpdate);  // the string reference should be updated
+ * }
+ * </pre>
+ * <p>
+ * Sample (persist update of active profile's server string to filesystem):
+ * <pre>
+ * public final void testAgent_KNS_UpdateActiveProfile_PersistUpdate() throws IonicException {
+ *     final ProfilePersistor profilePersistor = IonicTestEnvironment.getInstance().getProfilePersistor();
+ *     final Agent agent = new Agent(profilePersistor);
+ *     final String deviceId = agent.getActiveProfile().getDeviceId();
+ *     agent.updateProfileFromKNS(deviceId, "https://api.ionic.com");
+ *     agent.saveProfiles(profilePersistor);
+ * }
+ * </pre>
  */
 public class Agent extends MetadataHolder implements KeyServices {
 
@@ -74,6 +221,23 @@ public class Agent extends MetadataHolder implements KeyServices {
     }
 
     /**
+     * Copy constructor.
+     * <p>
+     * Copy the internal state of an {@link Agent}, so that the SEP file I/O is unnecessary.  This will greatly
+     * increase the throughput of Agent object instantiation.
+     *
+     * @param agent the object from which the loaded state should be copied
+     */
+    public Agent(final Agent agent) {
+        this(agent.getConfig());
+        initialized = agent.initialized;
+        deviceProfiles.addAll(agent.deviceProfiles);
+        activeProfile = agent.activeProfile;
+        fingerprint = agent.fingerprint;
+        setMetadata(agent.getMetadata());
+    }
+
+    /**
      * Convenience constructor that allows for instantiation of an uninitialized Agent with configuration.
      *
      * @param agentConfig the configuration of this agent
@@ -91,8 +255,19 @@ public class Agent extends MetadataHolder implements KeyServices {
      * @throws IonicException on errors
      */
     public Agent(final ProfilePersistor persistor) throws IonicException {
-        this();
+        this(new AgentConfig());
         initializeInternal(agentConfig, persistor, new MetadataMap(), new Fingerprint(null));
+    }
+
+    /**
+     * Convenience constructor that allows for instantiation of an initialized Agent in a single step.
+     *
+     * @param deviceProfiles The device profiles with which to initialize the Agent.
+     * @throws IonicException on errors
+     */
+    public Agent(final DeviceProfiles deviceProfiles) throws IonicException {
+        this(new AgentConfig());
+        initializeInternal(agentConfig, deviceProfiles, new MetadataMap(), new Fingerprint(null));
     }
 
     /**
@@ -171,7 +346,7 @@ public class Agent extends MetadataHolder implements KeyServices {
     private boolean setActiveProfileInternal(final String deviceId) {
         boolean found = false;
         for (DeviceProfile deviceProfile : this.deviceProfiles) {
-            if (deviceProfile.getDeviceId().equals(deviceId)) {
+            if (Value.isEqual(deviceProfile.getDeviceId(), deviceId)) {
                 found = true;
                 this.activeProfile = deviceProfile;
             }
@@ -241,6 +416,23 @@ public class Agent extends MetadataHolder implements KeyServices {
     }
 
     /**
+     * Return the {@link DeviceProfile} associated with the parameter input.
+     *
+     * @param deviceId the ID of the {@link DeviceProfile} to retrieve
+     * @return the {@link DeviceProfile} if found; otherwise null
+     */
+    private DeviceProfile getProfileInternal(final String deviceId) {
+        DeviceProfile deviceProfile = null;
+        for (DeviceProfile deviceProfileIt : this.deviceProfiles) {
+            if (Value.isEqual(deviceProfileIt.getDeviceId(), deviceId)) {
+                deviceProfile = deviceProfileIt;
+                break;
+            }
+        }
+        return deviceProfile;
+    }
+
+    /**
      * Remove a device profile from the agent device profile collection.
      *
      * @param deviceId The device ID of the profile.
@@ -254,6 +446,32 @@ public class Agent extends MetadataHolder implements KeyServices {
             }
         }
         return deviceProfiles.remove(deviceProfileToRemove);
+    }
+
+    /**
+     * Update the device profile with specified deviceId using KNS (Keyspace Name Service).  KNS, based on DNS, allows
+     * Machina clients to resolve endpoint information by providing a valid four-character keyspace ID.
+     * <p>
+     * The keyspace API URL is updated based on current information provided by KNS.  Use
+     * {@link #saveProfiles(ProfilePersistor)} to persist the update.
+     * <p>
+     * This {@link Agent} API is intended to facilitate the migration of a Machina key server to a new DNS name.
+     *
+     * @param deviceId the device ID of the profile to update; if empty, the active profile is updated
+     * @param knsUrl   the KNS endpoint URL to use for the request; if empty, the default endpoint URL
+     *                 'https://api.ionic.com/' is used
+     * @throws IonicException on bad input; lookup failure (API endpoint access)
+     */
+    public final void updateProfileFromKNS(final String deviceId, final String knsUrl) throws IonicException {
+        final DeviceProfile deviceProfile = Value.isEmpty(deviceId) ? activeProfile : getProfileInternal(deviceId);
+        SdkData.checkTrue((deviceProfile != null), SdkError.ISAGENT_NO_DEVICE_PROFILE);
+        final String keySpace = deviceProfile.getKeySpace();
+        SdkData.checkTrue((keySpace != null), SdkError.ISAGENT_MISSINGVALUE);
+        final String knsUrlCall = (Value.isEmpty(knsUrl) ? GetKeyspaceRequest.API_BASE_URL : knsUrl);
+        final GetKeyspaceResponse response = getKeyspaceInternal(new GetKeyspaceRequest(keySpace, knsUrlCall));
+        final List<String> apiURLs = response.getApiURLs();
+        deviceProfile.setServer(apiURLs.isEmpty()
+                ? new String(deviceProfile.getServer().toCharArray()) : apiURLs.iterator().next());
     }
 
     /**
@@ -307,9 +525,28 @@ public class Agent extends MetadataHolder implements KeyServices {
                 throw e;
             }
         }
-        final String deviceId = activeProfileParam[0];
-        this.deviceProfiles = deviceProfilesInit;
-        setActiveProfileInternal(deviceId);
+        loadProfilesInternal(deviceProfilesInit, activeProfileParam[0]);
+    }
+
+    /**
+     * Initialize this agent's device profile set with the supplied information.  This function facilitates SDK usages
+     * in cloud contexts, where {@link ProfilePersistor} objects are inappropriate.
+     *
+     * @param deviceProfiles  list of {@link DeviceProfile} for use by the agent
+     * @param activeProfileId the device id of the {@link DeviceProfile} designated as active
+     * @throws IonicException on errors
+     */
+    private void loadProfilesInternal(
+            final List<DeviceProfile> deviceProfiles, final String activeProfileId) throws IonicException {
+        for (DeviceProfile deviceProfile : deviceProfiles) {
+            try {
+                deviceProfile.isValid();
+            } catch (IonicException e) {
+                throw new IonicException(SdkError.ISAGENT_LOAD_PROFILES_FAILED, e);
+            }
+        }
+        this.deviceProfiles = deviceProfiles;
+        setActiveProfileInternal(activeProfileId);
     }
 
     /**
@@ -335,25 +572,106 @@ public class Agent extends MetadataHolder implements KeyServices {
     }
 
     /**
-     * Determine which device profile is associated with the provided key ID.
+     * Resolve the {@link DeviceProfile} to be used in the context of this {@link GetKeysRequest}.
+     * <p>
+     * To determine the {@link DeviceProfile} to use for this request, the {@link AgentConfig} boolean
+     * property  "autoselectprofile" is examined.
+     * <ul>
+     * <li>If set to "true", the most recently created device profile with a matching keyspace is returned.</li>
+     * <li>Otherwise, the agent's active profile is used.</li>
+     * </ul>
+     * <p>
+     * Note that only one server request is issued for a given GetKeys transaction.  In particular, it is not valid to
+     * request keys from multiple key servers in a single GetKeys request.  To request keys from multiple keyspaces,
+     * one GetKeys request should be made for each unique keyspace.
      *
-     * @param keyId The key ID for which to retrieve the associated device profile.
-     * @return Returns the device profile associated with the provided key ID.
-     * If no device profile is found for the key, then null is returned.
+     * @param keyId The protection key ID to fetch.
+     * @return the relevant {@link DeviceProfile} record for the request
      */
+    @SuppressWarnings("unused")  // used by JavaJNI tests
     public final DeviceProfile getDeviceProfileForKeyId(final String keyId) {
-        DeviceProfile bestProfile = null;
-        for (DeviceProfile deviceProfileIt : this.deviceProfiles) {
-            final String keySpace = deviceProfileIt.getKeySpace();
-            if ((keyId != null) && (keySpace.length() < keyId.length()) && keyId.startsWith(keySpace)) {
-                if (bestProfile == null) {
-                    bestProfile = deviceProfileIt;
-                } else if (bestProfile.getCreationTimestampSecs() < deviceProfileIt.getCreationTimestampSecs()) {
-                    bestProfile = deviceProfileIt;
-                }
-            }
-        }
-        return bestProfile;
+        return getDeviceProfileForKeyIdInternal(keyId);
+    }
+
+    /**
+     * Resolve the {@link DeviceProfile} to be used in the context of this {@link GetKeysRequest}.
+     *
+     * @param keyId The protection key ID to fetch.
+     * @return the relevant {@link DeviceProfile} record for the request
+     */
+    private DeviceProfile getDeviceProfileForKeyIdInternal(final String keyId) {
+        final boolean autoProfile = Boolean.parseBoolean(agentConfig.getProperty(
+                AgentConfig.Key.AUTOSELECT_PROFILE, Boolean.TRUE.toString()));
+        final boolean disableAutoProfile = Value.isEmpty(keyId);
+        return (autoProfile && !disableAutoProfile)
+                ? AgentTransactionUtil.getProfileForKeyId(deviceProfiles, keyId) : activeProfile;
+    }
+
+    /**
+     * Dynamically resolve the server metadata associated with a four-character Machina keyspace.
+     *
+     * @param request The request input data object.
+     * @return The response output data object, containing the keyspace access metadata.
+     * @throws IonicException if an error occurs
+     */
+    public final GetKeyspaceResponse getKeyspace(final GetKeyspaceRequest request) throws IonicException {
+        return getKeyspaceInternal(request);
+    }
+
+    /**
+     * Dynamically resolve the server metadata associated with a four-character Machina keyspace.
+     *
+     * @param keyspace The four character Machina keyspace to lookup.
+     * @return The response output data object, containing the keyspace access metadata.
+     * @throws IonicException if an error occurs
+     */
+    public final GetKeyspaceResponse getKeyspace(final String keyspace) throws IonicException {
+        return getKeyspaceInternal(new GetKeyspaceRequest(keyspace));
+    }
+
+    /**
+     * Dynamically resolve the server metadata associated with a four-character Machina keyspace.
+     *
+     * @param keyspace The four character Machina keyspace to lookup.
+     * @param url      The API URL used to perform the request.
+     * @return The response output data object, containing the keyspace access metadata.
+     * @throws IonicException if an error occurs
+     */
+    public final GetKeyspaceResponse getKeyspace(final String keyspace, final String url) throws IonicException {
+        return getKeyspaceInternal(new GetKeyspaceRequest(keyspace, url));
+    }
+
+    /**
+     * Dynamically resolve the server metadata associated with a four-character Machina keyspace.
+     *
+     * @param request The request input data object.
+     * @return The response output data object, containing the keyspace access metadata.
+     * @throws IonicException if an error occurs
+     */
+    private GetKeyspaceResponse getKeyspaceInternal(final GetKeyspaceRequest request) throws IonicException {
+        final GetKeyspaceResponse response = new GetKeyspaceResponse();
+        final GetKeyspaceTransaction transaction = new GetKeyspaceTransaction(new VbeProtocol(this), request, response);
+        transaction.run();
+        return response;
+    }
+
+    /**
+     * Creates a new device record for use with subsequent requests to Ionic.com.
+     *
+     * @param assertion        a (pre-generated) SAML assertion (proof of validated authentication to keyspace)
+     * @param keyspace         the four character Machina keyspace that is the target of the enrollment
+     * @param makeDeviceActive assign the newly created device as the active device for the agent
+     * @return the response output data object, containing the created device profile
+     * @throws IonicException if an error occurs
+     */
+    public final CreateDeviceResponse createDevice(
+            final byte[] assertion, final String keyspace, final boolean makeDeviceActive) throws IonicException {
+        final GetKeyspaceResponse getKeyspaceResponse = getKeyspaceInternal(new GetKeyspaceRequest(keyspace));
+        final String enrollmentURL = getKeyspaceResponse.getFirstEnrollmentURL();
+        final DeviceEnrollment deviceEnrollment = new DeviceEnrollment(DeviceUtils.toUrl(enrollmentURL));
+        final CreateDeviceResponse createDeviceResponse = deviceEnrollment.enroll(assertion);
+        addProfileInternal(createDeviceResponse.getDeviceProfile(), makeDeviceActive);
+        return createDeviceResponse;
     }
 
     /**
@@ -366,7 +684,8 @@ public class Agent extends MetadataHolder implements KeyServices {
     public final CreateDeviceResponse createDevice(
             final CreateDeviceRequest request) throws IonicException {
         final CreateDeviceResponse response = new CreateDeviceResponse();
-        final CreateDeviceTransaction transaction = new CreateDeviceTransaction(this, request, response);
+        final CreateDeviceTransaction transaction =
+                new CreateDeviceTransaction(new VbeProtocol(this), request, response);
         transaction.run();
         addProfileInternal(response.getDeviceProfile(), true);
         return response;
@@ -383,133 +702,105 @@ public class Agent extends MetadataHolder implements KeyServices {
     public final CreateDeviceResponse createDevice(
             final CreateDeviceRequest request, final boolean makeDeviceActive) throws IonicException {
         final CreateDeviceResponse response = new CreateDeviceResponse();
-        final CreateDeviceTransaction transaction = new CreateDeviceTransaction(this, request, response);
+        final CreateDeviceTransaction transaction =
+                new CreateDeviceTransaction(new VbeProtocol(this), request, response);
         transaction.run();
         addProfileInternal(response.getDeviceProfile(), makeDeviceActive);
         return response;
     }
 
     /**
-     * Creates one or more protection keys through Ionic.com.
+     * Creates one or more protection keys in the Machina service, and returns those keys to the caller.
+     * <p>
+     * Each protection key may contain caller-specified **immutable** key attributes, which describe the context
+     * of the intended key usage.  Each key may also contain caller-specified **mutable** key attributes, which
+     * may be updated after creation via the API {@link #updateKeys(UpdateKeysRequest)}.
+     * <p>
+     * The {@link CreateKeysRequest} parameter may contain caller-specified metadata, which provides contextual
+     * information about the device making the request.
      * <p>
      * NOTE: please limit to 1,000 keys per request, otherwise the server will return an error.
      *
-     * @param request The protection key request input data object.
-     * @return The protection key response output data object.
-     * @throws IonicException if an error occurs
+     * @param request the protection key request input data object
+     * @return the protection key response output data object
+     * @throws IonicException on failure to create the requested protection key(s)
      */
     @Override
     public final CreateKeysResponse createKeys(final CreateKeysRequest request) throws IonicException {
+        return createKeysInternal(request, new VbeProtocol(this));
+    }
+
+    @Override
+    public final CreateKeysResponse createKey(final KeyAttributesMap attributes,
+                                              final KeyAttributesMap mutableAttributes,
+                                              final MetadataMap metadata) throws IonicException {
+        return createKeyInternal(attributes, mutableAttributes, metadata, new VbeProtocol(this));
+    }
+
+    @Override
+    public final CreateKeysResponse createKey(final KeyAttributesMap attributes,
+                                              final KeyAttributesMap mutableAttributes) throws IonicException {
+        return createKeyInternal(attributes, mutableAttributes, new MetadataMap(), new VbeProtocol(this));
+    }
+
+    @Override
+    public final CreateKeysResponse createKey(final KeyAttributesMap attributes,
+                                              final MetadataMap metadata) throws IonicException {
+        return createKeyInternal(attributes, new KeyAttributesMap(), metadata, new VbeProtocol(this));
+    }
+
+    @Override
+    public final CreateKeysResponse createKey(final KeyAttributesMap attributes) throws IonicException {
+        return createKeyInternal(attributes, new KeyAttributesMap(), new MetadataMap(), new VbeProtocol(this));
+    }
+
+    @Override
+    public final CreateKeysResponse createKey(final MetadataMap metadata) throws IonicException {
+        return createKeyInternal(
+                new KeyAttributesMap(), new KeyAttributesMap(), metadata, new VbeProtocol(this));
+    }
+
+    @Override
+    public final CreateKeysResponse createKey() throws IonicException {
+        return createKeyInternal(
+                new KeyAttributesMap(), new KeyAttributesMap(), new MetadataMap(), new VbeProtocol(this));
+    }
+
+    /**
+     * Creates one or more protection keys in the Machina service, and returns those keys to the caller.
+     *
+     * @param request  the protection key request input data object
+     * @param protocol the implementation of the semantics for the targeted service endpoint
+     * @return the protection key response output data object
+     * @throws IonicException on failure to create the requested protection key(s)
+     */
+    protected CreateKeysResponse createKeysInternal(final CreateKeysRequest request,
+                                                    final ServiceProtocol protocol) throws IonicException {
         final CreateKeysResponse response = new CreateKeysResponse();
-        final CreateKeysTransaction transaction = new CreateKeysTransaction(this, request, response);
+        final CreateKeysTransaction transaction = new CreateKeysTransaction(protocol, request, response);
         transaction.run();
         return response;
     }
 
     /**
-     * Creates a single protection key with **immutable** and mutable key attributes through Ionic.com.
+     * Creates one or more protection keys in the Machina service, and returns those keys to the caller.
      *
-     * @param attributes        The **immutable** protection key attributes to use for creating the protection key.
-     * @param mutableAttributes The mutable protection key attributes to use for creating the protection key.
-     * @param metadata          The metadata properties to send along with the HTTP request.
-     * @return The protection key response output data object.
-     * @throws IonicException if an error occurs
+     * @param attributes        the **immutable** key attributes to associate with the key
+     * @param mutableAttributes the mutable key attributes to associate with the key
+     * @param metadata          the metadata properties to associate with the request
+     * @param protocol          the implementation of the semantics for the targeted service endpoint
+     * @return the protection key response output data object
+     * @throws IonicException on failure to create the requested protection key
      */
-    @Override
-    public final CreateKeysResponse createKey(final KeyAttributesMap attributes,
-                                              final KeyAttributesMap mutableAttributes,
-                                              final MetadataMap metadata) throws IonicException {
+    protected CreateKeysResponse createKeyInternal(final KeyAttributesMap attributes,
+                                                   final KeyAttributesMap mutableAttributes,
+                                                   final MetadataMap metadata,
+                                                   final ServiceProtocol protocol) throws IonicException {
         final CreateKeysRequest request = new CreateKeysRequest();
         request.setMetadata(metadata);
         request.add(new CreateKeysRequest.Key(IDC.Payload.REF, 1, attributes, mutableAttributes));
-        return createKeyInternal(request);
-    }
-
-    /**
-     * Creates a single protection key with **immutable** and mutable key attributes through Ionic.com.
-     *
-     * @param attributes        The **immutable** protection key attributes to use for creating the protection key.
-     * @param mutableAttributes The mutable protection key attributes to use for creating the protection key.
-     * @return The protection key response output data object.
-     * @throws IonicException if an error occurs
-     */
-    @Override
-    public final CreateKeysResponse createKey(final KeyAttributesMap attributes,
-                                              final KeyAttributesMap mutableAttributes) throws IonicException {
-        final CreateKeysRequest request = new CreateKeysRequest();
-        request.add(new CreateKeysRequest.Key(IDC.Payload.REF, 1, attributes, mutableAttributes));
-        return createKeyInternal(request);
-    }
-
-    /**
-     * Creates a single protection key with **immutable** key attributes through Ionic.com.
-     *
-     * @param attributes The **immutable** protection key attributes to use for creating the protection key.
-     * @param metadata   The metadata properties to send along with the HTTP request.
-     * @return The protection key response output data object.
-     * @throws IonicException if an error occurs
-     */
-    @Override
-    public final CreateKeysResponse createKey(final KeyAttributesMap attributes,
-                                              final MetadataMap metadata) throws IonicException {
-        final CreateKeysRequest request = new CreateKeysRequest();
-        request.setMetadata(metadata);
-        request.add(new CreateKeysRequest.Key(IDC.Payload.REF, 1, attributes, new KeyAttributesMap()));
-        return createKeyInternal(request);
-    }
-
-    /**
-     * Creates a single protection key with **immutable** key attributes through Ionic.com.
-     *
-     * @param attributes The **immutable** protection key attributes to use for creating the protection key.
-     * @return The protection key response output data object.
-     * @throws IonicException if an error occurs
-     */
-    @Override
-    public final CreateKeysResponse createKey(final KeyAttributesMap attributes) throws IonicException {
-        final CreateKeysRequest request = new CreateKeysRequest();
-        request.add(new CreateKeysRequest.Key(IDC.Payload.REF, 1, attributes, new KeyAttributesMap()));
-        return createKeyInternal(request);
-    }
-
-    /**
-     * Creates a single protection key without key attributes through Ionic.com.
-     *
-     * @param metadata The metadata properties to send along with the HTTP request.
-     * @return The protection key response output data object.
-     * @throws IonicException if an error occurs
-     */
-    @Override
-    public final CreateKeysResponse createKey(final MetadataMap metadata) throws IonicException {
-        final CreateKeysRequest request = new CreateKeysRequest();
-        request.setMetadata(metadata);
-        request.add(new CreateKeysRequest.Key(IDC.Payload.REF, 1, new KeyAttributesMap(), new KeyAttributesMap()));
-        return createKeyInternal(request);
-    }
-
-    /**
-     * Creates a single protection key without key attributes through Ionic.com.
-     *
-     * @return The protection key response output data object.
-     * @throws IonicException if an error occurs
-     */
-    @Override
-    public final CreateKeysResponse createKey() throws IonicException {
-        final CreateKeysRequest request = new CreateKeysRequest();
-        request.add(new CreateKeysRequest.Key(IDC.Payload.REF, 1, new KeyAttributesMap(), new KeyAttributesMap()));
-        return createKeyInternal(request);
-    }
-
-    /**
-     * Creates one or more protection keys through Ionic.com.
-     *
-     * @param request The protection key request input data object.
-     * @return The protection key response output data object.
-     * @throws IonicException if an error occurs
-     */
-    private CreateKeysResponse createKeyInternal(final CreateKeysRequest request) throws IonicException {
         final CreateKeysResponse response = new CreateKeysResponse();
-        final CreateKeysTransaction transaction = new CreateKeysTransaction(this, request, response);
+        final CreateKeysTransaction transaction = new CreateKeysTransaction(protocol, request, response);
         transaction.run();
         // response validation (reference implementation symmetry)
         if (response.getKeys().isEmpty()) {
@@ -520,109 +811,98 @@ public class Agent extends MetadataHolder implements KeyServices {
     }
 
     /**
-     * Gets protection keys from Ionic.com.
+     * Retrieves a set of protection keys (by key tag, or by external id) from the Machina service.
+     * <p>
+     * The {@link GetKeysRequest} parameter may contain caller-specified metadata, which provides contextual
+     * information about the device making the request.
      * <p>
      * NOTE: please limit to 1,000 keys per request, otherwise the server will return an error.
      *
-     * @param request The protection key request input data object.
-     * @return The protection key response output data object.
-     * @throws IonicException if an error occurs
+     * @param request the protection key request input data object
+     * @return the protection key response output data object
+     * @throws IonicException on failure to retrieve the requested protection key(s)
      */
     @Override
     public final GetKeysResponse getKeys(final GetKeysRequest request) throws IonicException {
-        return getKeysInternal(request);
+        final String firstKeyId = (request.getKeyIds().isEmpty() ? "" : request.getKeyIds().iterator().next());
+        return getKeysInternal(request, new VbeProtocol(this, getDeviceProfileForKeyIdInternal(firstKeyId)));
+    }
+
+    @Override
+    public final GetKeysResponse getKey(final String keyId, final MetadataMap metadata) throws IonicException {
+        return getKeyInternal(keyId, metadata, new VbeProtocol(this, getDeviceProfileForKeyIdInternal(keyId)));
+    }
+
+    @Override
+    public final GetKeysResponse getKey(final String keyId) throws IonicException {
+        return getKeyInternal(keyId, new MetadataMap(),
+                new VbeProtocol(this, getDeviceProfileForKeyIdInternal(keyId)));
     }
 
     /**
-     * Gets protection keys from Ionic.com.
+     * Retrieves a single protection key (by key tag, or by external id) from the Machina service.
      *
-     * @param request The protection key request input data object.
-     * @return The protection key response output data object.
-     * @throws IonicException if an error occurs
+     * @param request  the protection key request input data object
+     * @param protocol the implementation of the semantics for the targeted service endpoint
+     * @return the protection key response output data object
+     * @throws IonicException on failure to retrieve the requested protection key(s)
      */
-    private GetKeysResponse getKeysInternal(final GetKeysRequest request) throws IonicException {
+    protected GetKeysResponse getKeysInternal(final GetKeysRequest request,
+                                              final ServiceProtocol protocol) throws IonicException {
         final GetKeysResponse response = new GetKeysResponse();
-        final GetKeysTransaction transaction = new GetKeysTransaction(this, request, response);
+        final GetKeysTransaction transaction = new GetKeysTransaction(protocol, request, response);
         transaction.run();
         return response;
     }
 
     /**
-     * Gets a single protection key from Ionic.com.
+     * Retrieves a single protection key (by key tag) from the Machina service.
+     * <p>
+     * By convention, failures to retrieve a single {@link com.ionic.sdk.agent.key.AgentKey} specified by key tag
+     * should result in an {@link IonicException} with the error code {@link SdkError#ISAGENT_KEY_DENIED}.
      *
-     * @param keyId    The protection key ID to fetch.
-     * @param metadata The metadata properties to send along with the HTTP request.
-     * @return The protection key response output data object.
-     * @throws IonicException if an error occurs
+     * @param keyId    the protection key tag to fetch
+     * @param metadata the metadata properties to associate with the request
+     * @param protocol the implementation of the semantics for the targeted service endpoint
+     * @return the protection key response output data object
+     * @throws IonicException on failure of the remote request; on failure to fetch the specified protection key
      */
-    @Override
-    public final GetKeysResponse getKey(final String keyId, final MetadataMap metadata) throws IonicException {
+    protected GetKeysResponse getKeyInternal(final String keyId, final MetadataMap metadata,
+                                             final ServiceProtocol protocol) throws IonicException {
         final GetKeysRequest request = new GetKeysRequest();
         request.setMetadata(metadata);
         request.add(keyId);
-        return getKeysInternal(request);
-    }
-
-    /**
-     * Gets a single protection key from Ionic.com.
-     *
-     * @param keyId The protection key ID to fetch.
-     * @return The protection key response output data object.
-     * @throws IonicException if an error occurs
-     */
-    @Override
-    public final GetKeysResponse getKey(final String keyId) throws IonicException {
-        final GetKeysRequest request = new GetKeysRequest();
-        request.add(keyId);
-        return getKeysInternal(request);
-    }
-
-    /**
-     * Updates one or more protection keys through Ionic.com.
-     *
-     * @param request The protection key request input data object.
-     * @return The protection key response output data object.
-     * @throws IonicException if an error occurs
-     */
-    private UpdateKeysResponse updateKeysInternal(final UpdateKeysRequest request) throws IonicException {
-        final UpdateKeysResponse response = new UpdateKeysResponse();
-        final UpdateKeysTransaction transaction = new UpdateKeysTransaction(this, request, response);
+        final GetKeysResponse response = new GetKeysResponse();
+        final GetKeysTransaction transaction = new GetKeysTransaction(protocol, request, response);
         transaction.run();
+        // response validation (reference implementation symmetry), SDK-3105
+        if (response.getKeys().isEmpty()) {
+            throw new IonicException(SdkError.ISAGENT_KEY_DENIED,
+                    new IonicServerException(SdkError.ISAGENT_MISSINGVALUE, response.getConversationId(), response));
+        }
         return response;
     }
 
     /**
-     * Updates one or more protection keys through Ionic.com.
-     * <p>
-     * MutableAttributes will be modified on the server, as specified in the request. Since
-     * changes to immutable attributes are prohibited, the value for Attributes (if specified)
-     * will be ignored and the Attributes will remain unchanged on the server. The keys returned
-     * in the Response object will copy the Attributes of the keys provided in the Request object
-     * for convenience, but will not reflect the values on the server if changes were made.
+     * Updates a set of protection keys in the Machina service.
      *
-     * @param request The protection key request input data object.
-     * @return The protection key response output data object.
-     * @throws IonicException if an error occurs
+     * @param request the protection key request input data object
+     * @return the protection key response output data object
+     * @throws IonicException on failure of the remote request
      */
+    private UpdateKeysResponse updateKeysInternal(final UpdateKeysRequest request) throws IonicException {
+        final UpdateKeysResponse response = new UpdateKeysResponse();
+        final UpdateKeysTransaction transaction =
+                new UpdateKeysTransaction(new VbeProtocol(this), request, response);
+        transaction.run();
+        return response;
+    }
+
     @Override
     public final UpdateKeysResponse updateKeys(final UpdateKeysRequest request) throws IonicException {
         return updateKeysInternal(request);
     }
 
-    /**
-     * Updates a single protection key from Ionic.com.
-     * <p>
-     * MutableAttributes will be modified on the server, as specified in the request. Since
-     * changes to immutable attributes are prohibited, the value for Attributes (if specified)
-     * will be ignored and the Attributes will remain unchanged on the server. The key returned
-     * in the Response object will copy the Attributes of the key provided in the Request object
-     * for convenience, but will not reflect the values on the server if changes were made.
-     *
-     * @param key      key to update
-     * @param metadata The metadata properties to send along with the HTTP request.
-     * @return The protection key response output data object.
-     * @throws IonicException if an error occurs
-     */
     @Override
     public final UpdateKeysResponse updateKey(
             final UpdateKeysRequest.Key key, final MetadataMap metadata) throws IonicException {
@@ -633,7 +913,10 @@ public class Agent extends MetadataHolder implements KeyServices {
     }
 
     /**
-     * Updates a single protection key from Ionic.com.
+     * Updates a single protection key in the Machina service.
+     * <p>
+     * The call may contain caller-specified metadata, which provides contextual
+     * information about the device making the request.
      * <p>
      * MutableAttributes will be modified on the server, as specified in the request. Since
      * changes to immutable attributes are prohibited, the value for Attributes (if specified)
@@ -642,8 +925,8 @@ public class Agent extends MetadataHolder implements KeyServices {
      * for convenience, but will not reflect the values on the server if changes were made.
      *
      * @param key key to update
-     * @return The protection key response output data object.
-     * @throws IonicException if an error occurs
+     * @return the protection key response output data object
+     * @throws IonicException on failure of the remote request
      */
     public final UpdateKeysResponse updateKey(final UpdateKeysRequest.Key key) throws IonicException {
         final UpdateKeysRequest request = new UpdateKeysRequest();
@@ -701,7 +984,8 @@ public class Agent extends MetadataHolder implements KeyServices {
      */
     private GetResourcesResponse getResourcesInternal(final GetResourcesRequest request) throws IonicException {
         final GetResourcesResponse response = new GetResourcesResponse();
-        final GetResourcesTransaction transaction = new GetResourcesTransaction(this, request, response);
+        final GetResourcesTransaction transaction =
+                new GetResourcesTransaction(new VbeProtocol(this), request, response);
         transaction.run();
         return response;
     }
@@ -759,9 +1043,47 @@ public class Agent extends MetadataHolder implements KeyServices {
      */
     private LogMessagesResponse logMessageInternal(final LogMessagesRequest request) throws IonicException {
         final LogMessagesResponse response = new LogMessagesResponse();
-        final LogMessagesTransaction transaction = new LogMessagesTransaction(this, request, response);
+        final LogMessagesTransaction transaction =
+                new LogMessagesTransaction(new VbeProtocol(this), request, response);
         transaction.run();
         return response;
+    }
+
+    /**
+     * Creates an Identity Assertion using the active {@link DeviceProfile}.  Assertions are used as proof of
+     * membership in an Ionic keyspace.  They can be created by Ionic devices, and validated by any other system.
+     *
+     * @param request the identity assertion request input data object
+     * @return the identity assertion response output data object
+     * @throws IonicException if an error occurs during servicing of the request
+     */
+    public CreateIdentityAssertionResponse createIdentityAssertion(
+            final CreateIdentityAssertionRequest request) throws IonicException {
+        final CreateIdentityAssertionResponse response = new CreateIdentityAssertionResponse();
+        final CreateIdentityAssertionTransaction transaction =
+                new CreateIdentityAssertionTransaction(new VbeProtocol(this), request, response);
+        transaction.run();
+        return response;
+    }
+
+    /**
+     * Verify the validity of an Identity Assertion.  This may be used to verify that the assertion was
+     * generated by a previously enrolled Ionic Machina device.
+     *
+     * @param pubkeyBase64    the public key component of the RSA keypair used to generate the identity assertion;
+     *                        if null, the key is retrieved via a Keyspace Name Service (KNS) lookup
+     * @param assertionBase64 the container for the supplied Identity Assertion data
+     * @param nonce           the single-use token incorporated into the canonical form / digest of the assertion
+     * @return a container object holding the data from the unwrapped assertionBase64 input
+     * @throws IonicException on failure to validate the specified assertion
+     */
+    public IdentityAssertion validateIdentityAssertion(
+            final String pubkeyBase64, final String assertionBase64, final String nonce) throws IonicException {
+        final IdentityAssertion assertion = new IdentityAssertion(assertionBase64);
+        final String keyspace = AssertionUtils.toKeyspace(assertion.getSigner());
+        final IdentityAssertionValidator validator = new IdentityAssertionValidator(
+                (pubkeyBase64 == null) ? new PubkeyResolver(this).getPublicKeyKeyspace(keyspace) : pubkeyBase64);
+        return validator.validate(assertionBase64, null, null, nonce);
     }
 
     /**
@@ -833,7 +1155,7 @@ public class Agent extends MetadataHolder implements KeyServices {
      * @throws IonicException if an error occurs
      */
     private void initializeWithoutProfilesInternal(final AgentConfig agentConfig) throws IonicException {
-        initializeInternal(agentConfig, null, new MetadataMap(), new Fingerprint(null));
+        initializeInternal(agentConfig, (ProfilePersistor) null, new MetadataMap(), new Fingerprint(null));
     }
 
     /**
@@ -861,6 +1183,29 @@ public class Agent extends MetadataHolder implements KeyServices {
     }
 
     /**
+     * Initialize the agent with a configuration object and specified profile set.
+     *
+     * @param agentConfig    Configuration object.
+     * @param deviceProfiles Device profile information for use by the Agent.
+     * @param metadata       Device server metadata object.
+     * @param fingerprint    Device fingerprint object.
+     * @throws IonicException if an error occurs
+     */
+    private void initializeInternal(final AgentConfig agentConfig, final DeviceProfiles deviceProfiles,
+                                    final MetadataMap metadata, final Fingerprint fingerprint) throws IonicException {
+        if (initialized) {
+            throw new IonicException(SdkError.ISAGENT_DOUBLEINIT);
+        }
+        AgentSdk.initialize();
+        loadProfilesInternal(deviceProfiles.getProfiles(), deviceProfiles.getActiveProfileId());
+        this.initialized = true;
+        this.agentConfig = agentConfig;
+        setMetadata(metadata);
+        setMetadata(IDC.Metadata.IONIC_AGENT, SdkVersion.getAgentString());
+        this.fingerprint = fingerprint;
+    }
+
+    /**
      * Determine if the agent is initialized and ready for use.
      *
      * @return True if the agent is initialized; false otherwise.
@@ -877,6 +1222,7 @@ public class Agent extends MetadataHolder implements KeyServices {
     /**
      * Calibrate the server offset. Called when the server returns a timestamp denied error,
      * Agent will calibrate here and retry
+     *
      * @param serverTimeMillis The server time returned from the timestamp denied response
      */
     public static void calibrateServerTimeOffsetMillis(final long serverTimeMillis) {
@@ -887,16 +1233,16 @@ public class Agent extends MetadataHolder implements KeyServices {
         // update server time offset to be the difference between server time millis
         // and our own device time millis
         serverTimeOffsetMillis = serverTimeMillis - deviceTimeMillis;
-
-        return;
     }
 
     /**
      * Get the current server time UTC seconds.
-     *
+     * <p>
      * This method returns the current server time UTC seconds.  See getServerTimeUtcMillis()
      * for more information about how this time value is determined and why it is useful.
-     * @return  Server time in seconds
+     *
+     * @return Server time in seconds
+     * @see com.ionic.sdk.core.date.DateTime
      */
     public static long getServerTimeUtcSecs() {
         return ((System.currentTimeMillis() + serverTimeOffsetMillis) / DateTime.ONE_SECOND_MILLIS);
@@ -904,26 +1250,28 @@ public class Agent extends MetadataHolder implements KeyServices {
 
     /**
      * Get the current server time UTC milliseconds.
-     *
+     * <p>
      * This method returns the current server time UTC milliseconds based on information received
      * from any communication with Ionic.com. The server time is typically very similar or even
      * identical to local UTC time, but in some cases it can be substantially different if/when
      * the local clock is wrong. The server UTC time is a more reliable source of the absolute
-     *  real world UTC time than the local device UTC time.
-     * @return  Server time in milliseconds
+     * real world UTC time than the local device UTC time.
+     *
+     * @return Server time in milliseconds
+     * @see com.ionic.sdk.core.date.DateTime
      */
     public static long getServerTimeUtcMillis() {
         // get current UTC time on device with millisecond precision
         final long deviceTimeMillis = System.currentTimeMillis();
 
         // add server time offset to device UTC time and return
-        final long currentServerTimeUtcSeconds = deviceTimeMillis + serverTimeOffsetMillis;
-        return currentServerTimeUtcSeconds;
+        return deviceTimeMillis + serverTimeOffsetMillis;
     }
 
     /**
      * Get the server offset UTC milliseconds.
-     * @return  The server offset in milliseconds
+     *
+     * @return The server offset in milliseconds
      */
     public static long getServerTimeOffsetMillis() {
         return serverTimeOffsetMillis;
@@ -935,14 +1283,17 @@ public class Agent extends MetadataHolder implements KeyServices {
      *
      * @param agent the object from which the loaded state should be copied
      * @return a new Agent instance, with configuration copied from original
+     * @deprecated please migrate usages to the replacement {@link Agent#Agent(Agent)}
      */
+    @Deprecated
     public static Agent clone(final Agent agent) {
         final Agent agentClone = new Agent();
         agentClone.initialized = agent.initialized;
         agentClone.deviceProfiles = new ArrayList<DeviceProfile>(agent.deviceProfiles);
         agentClone.activeProfile = agent.activeProfile;
-        agentClone.agentConfig = new AgentConfig(agent.agentConfig);
+        agentClone.agentConfig = new AgentConfig(agent.getConfig());
         agentClone.fingerprint = agent.fingerprint;
+        agentClone.setMetadata(agent.getMetadata());
         return agentClone;
     }
 

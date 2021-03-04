@@ -110,7 +110,14 @@ public final class IonicTestEnvironment {
     }
 
     /**
-     * @return the <code>KeyServices</code> implementation to be used by the test suite
+     * @return the enrollment URL for the test environment tenant keyspace
+     */
+    public String getEnrollmentUrl() {
+        return envEnrollmentUrl;
+    }
+
+    /**
+     * @return the {@link KeyServices} implementation to be used by the test suite
      * @throws IonicException on failure to resolve the persistor file location, or the KeyVault file location
      */
     public KeyServices getKeyServices() throws IonicException {

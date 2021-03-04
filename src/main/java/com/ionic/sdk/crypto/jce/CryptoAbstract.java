@@ -10,18 +10,22 @@ import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.Mac;
 import javax.crypto.SecretKeyFactory;
+import javax.net.ssl.SSLContext;
 import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
 import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
 import java.security.Provider;
 import java.security.Signature;
+import java.security.spec.MGF1ParameterSpec;
+import java.security.spec.PSSParameterSpec;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
  * The Ionic Java SDK provides pass-through access to various JCE facilities implemented in either the base Java
- * Runtime Environment, or in third-party libraries (for example, <a href='http://bouncycastle.org/'>BouncyCastle</a>).
+ * Runtime Environment, or in third-party libraries (for example, <a href='http://bouncycastle.org/'
+ * target='_blank'>Bouncy Castle</a>).
  * <p>
  * This interface is intended to enable Ionic SDK users to substitute their own cryptography
  * library into an Ionic SDK-enabled process.  If so configured, the SDK will use only the facilities provided by that
@@ -141,6 +145,9 @@ public final class CryptoAbstract {
 
     /**
      * Return an instance of an RSA signature facility.
+     * <p>
+     * Reference <a href="https://bugs.openjdk.java.net/browse/JDK-8190180" target="_blank">JDK Bug System</a>
+     * Reference <a href="https://stackoverflow.com/questions/48803100/" target="_blank">RSA-PSS</a>
      *
      * @return an instance of {@link Signature}, suitable for signing / verifying a byte stream
      * @throws IonicException if the signature facility is not provided by the configured CryptoAbstract implementation
@@ -150,7 +157,11 @@ public final class CryptoAbstract {
             if (provider == null) {
                 return Signature.getInstance(RsaCipher.SIGNATURE_ALGORITHM);
             } else if (PROVIDER_SUNJCE.equals(provider.getName())) {
-                return Signature.getInstance(RsaCipher.SIGNATURE_ALGORITHM, PROVIDER_SUNJSSE);
+                // works on JRE >= 11, NoSuchAlgorithmException on previous versions
+                final Signature signature = Signature.getInstance(ALGORITHM_RSASIGN, PROVIDER_RSASIGN);
+                signature.setParameter(new PSSParameterSpec(
+                        Hash.ALGORITHM, MASK_GENERATION_RSASIGN, MGF1ParameterSpec.SHA256, Hash.HASH_BYTES, 1));
+                return signature;
             } else {
                 return Signature.getInstance(RsaCipher.SIGNATURE_ALGORITHM, provider);
             }
@@ -245,6 +256,27 @@ public final class CryptoAbstract {
     }
 
     /**
+     * Return an SSLContext object instance using the specified protocol.
+     *
+     * @param protocol the {@link SSLContext} protocol to use
+     * @return an SSLContext object instance using the specified protocol
+     * @throws IonicException if the facility is not provided by the configured CryptoAbstract implementation
+     */
+    public SSLContext getSSLContext(final String protocol) throws IonicException {
+        try {
+            if (provider == null) {
+                return SSLContext.getInstance(protocol);
+            } else if (PROVIDER_SUNJCE.equals(provider.getName())) {
+                return SSLContext.getInstance(protocol, PROVIDER_SUNJSSE);
+            } else {
+                return SSLContext.getInstance(protocol, provider);
+            }
+        } catch (GeneralSecurityException e) {
+            throw new IonicException(SdkError.ISCRYPTO_ERROR, e);
+        }
+    }
+
+    /**
      * Return a Message Authentication Code (MAC) object instance using the HMAC algorithm.
      *
      * @return a Message Authentication Code (MAC) object instance using the HMAC algorithm
@@ -301,4 +333,19 @@ public final class CryptoAbstract {
      * Provider name for built-in JCE implementation.
      */
     private static final String PROVIDER_SUNJSSE = "SunJSSE";
+
+    /**
+     * Algorithm name for built-in JCE implementation.
+     */
+    private static final String ALGORITHM_RSASIGN = "RSASSA-PSS";
+
+    /**
+     * Provider name for built-in JCE implementation.
+     */
+    private static final String PROVIDER_RSASIGN = "SunRsaSign";
+
+    /**
+     * The algorithm name of the mask generation function.
+     */
+    private static final String MASK_GENERATION_RSASIGN = "MGF1";
 }

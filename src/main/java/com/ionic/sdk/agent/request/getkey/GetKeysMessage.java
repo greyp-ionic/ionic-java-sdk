@@ -1,14 +1,13 @@
 package com.ionic.sdk.agent.request.getkey;
 
-import com.ionic.sdk.agent.Agent;
+import com.ionic.sdk.agent.ServiceProtocol;
 import com.ionic.sdk.agent.key.KeyAttributesMap;
 import com.ionic.sdk.agent.request.base.AgentRequestBase;
 import com.ionic.sdk.agent.request.base.MessageBase;
 import com.ionic.sdk.agent.service.IDC;
-import com.ionic.sdk.agent.transaction.AgentTransactionUtil;
 import com.ionic.sdk.core.value.Value;
-import com.ionic.sdk.device.profile.DeviceProfile;
 import com.ionic.sdk.error.IonicException;
+import com.ionic.sdk.error.SdkData;
 import com.ionic.sdk.error.SdkError;
 import com.ionic.sdk.json.JsonIO;
 import com.ionic.sdk.json.JsonSource;
@@ -33,12 +32,11 @@ public class GetKeysMessage extends MessageBase {
     /**
      * Constructor.
      *
-     * @param agent         the {@link com.ionic.sdk.key.KeyServices} implementation
-     * @param deviceProfile the relevant {@link DeviceProfile} record for the request
+     * @param protocol the protocol used by the {@link com.ionic.sdk.key.KeyServices} client (authentication, state)
      * @throws IonicException on random number generation failure
      */
-    GetKeysMessage(final Agent agent, final DeviceProfile deviceProfile) throws IonicException {
-        super(agent, AgentTransactionUtil.generateConversationId(deviceProfile, IDC.Message.SERVER_API_CID));
+    GetKeysMessage(final ServiceProtocol protocol) throws IonicException {
+        super(protocol);
     }
 
     /**
@@ -46,19 +44,22 @@ public class GetKeysMessage extends MessageBase {
      *
      * @param requestBase the user-generated object containing the attributes of the request
      * @return a {@link JsonObject} to be incorporated into the request payload
-     * @throws IonicException on cryptography errors (used by protected attributes feature)
      */
     @Override
     protected final JsonObject getJsonData(final AgentRequestBase requestBase) throws IonicException {
+        SdkData.checkTrue(requestBase instanceof GetKeysRequest, SdkError.ISAGENT_ERROR);
         final GetKeysRequest getKeysRequest = (GetKeysRequest) requestBase;
         final JsonObjectBuilder objectBuilder = Json.createObjectBuilder();
         JsonTarget.add(objectBuilder, IDC.Payload.PROTECTION_KEYS, JsonTarget.toJsonArray(getKeysRequest.getKeyIds()));
         // external-id
         final JsonObjectBuilder protectionKeyQueries = Json.createObjectBuilder();
-        for (final String id : getKeysRequest.getExternalIds()) {
+        for (final GetKeysRequest.ExternalId id : getKeysRequest.getExternalIdObjects()) {
             final JsonObjectBuilder externalId = Json.createObjectBuilder();
-            JsonTarget.addNotNull(externalId, IDC.Payload.IONIC_EXTERNAL_ID, id);
-            JsonTarget.addNotNull(protectionKeyQueries, id, externalId.build());
+            JsonTarget.addNotNull(externalId, IDC.Payload.IONIC_EXTERNAL_ID, id.getExternalId());
+            if (id.getQuantity() > 0) {
+                JsonTarget.add(externalId, IDC.Payload.QTY, id.getQuantity());
+            }
+            JsonTarget.addNotNull(protectionKeyQueries, id.getExternalId(), externalId.build());
         }
         JsonTarget.add(objectBuilder, IDC.Payload.PROTECTION_KEY_QUERIES, protectionKeyQueries.build());
         return objectBuilder.build();

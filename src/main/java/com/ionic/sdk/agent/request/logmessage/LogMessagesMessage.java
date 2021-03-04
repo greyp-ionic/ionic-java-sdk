@@ -1,10 +1,9 @@
 package com.ionic.sdk.agent.request.logmessage;
 
-import com.ionic.sdk.agent.Agent;
+import com.ionic.sdk.agent.ServiceProtocol;
 import com.ionic.sdk.agent.request.base.AgentRequestBase;
 import com.ionic.sdk.agent.request.base.MessageBase;
 import com.ionic.sdk.agent.service.IDC;
-import com.ionic.sdk.agent.transaction.AgentTransactionUtil;
 import com.ionic.sdk.error.IonicException;
 import com.ionic.sdk.error.SdkData;
 import com.ionic.sdk.error.SdkError;
@@ -26,11 +25,11 @@ public class LogMessagesMessage extends MessageBase {
     /**
      * Constructor.
      *
-     * @param agent the {@link com.ionic.sdk.key.KeyServices} implementation
+     * @param protocol the protocol used by the {@link com.ionic.sdk.key.KeyServices} client (authentication, state)
      * @throws IonicException on random number generation failure
      */
-    LogMessagesMessage(final Agent agent) throws IonicException {
-        super(agent, AgentTransactionUtil.generateConversationId(agent.getActiveProfile(), null));
+    LogMessagesMessage(final ServiceProtocol protocol) throws IonicException {
+        super(protocol);
     }
 
     /**
@@ -42,6 +41,7 @@ public class LogMessagesMessage extends MessageBase {
     @Override
     protected final JsonValue getJsonData(final AgentRequestBase requestBase) throws IonicException {
         final JsonArrayBuilder arrayBuilder = Json.createArrayBuilder();
+        SdkData.checkTrue(requestBase instanceof LogMessagesRequest, SdkError.ISAGENT_ERROR);
         final LogMessagesRequest logMessagesRequest = (LogMessagesRequest) requestBase;
         for (LogMessagesRequest.Message message : logMessagesRequest.getMessages()) {
             JsonTarget.addNotNull(arrayBuilder, getJsonDataOne(message));

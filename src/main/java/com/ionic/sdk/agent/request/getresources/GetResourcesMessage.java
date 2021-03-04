@@ -1,11 +1,12 @@
 package com.ionic.sdk.agent.request.getresources;
 
-import com.ionic.sdk.agent.Agent;
+import com.ionic.sdk.agent.ServiceProtocol;
 import com.ionic.sdk.agent.request.base.AgentRequestBase;
 import com.ionic.sdk.agent.request.base.MessageBase;
 import com.ionic.sdk.agent.service.IDC;
-import com.ionic.sdk.agent.transaction.AgentTransactionUtil;
 import com.ionic.sdk.error.IonicException;
+import com.ionic.sdk.error.SdkData;
+import com.ionic.sdk.error.SdkError;
 import com.ionic.sdk.json.JsonTarget;
 
 import javax.json.Json;
@@ -25,11 +26,11 @@ public class GetResourcesMessage extends MessageBase {
     /**
      * Constructor.
      *
-     * @param agent the {@link com.ionic.sdk.key.KeyServices} implementation
+     * @param protocol the protocol used by the {@link com.ionic.sdk.key.KeyServices} client (authentication, state)
      * @throws IonicException on random number generation failure
      */
-    GetResourcesMessage(final Agent agent) throws IonicException {
-        super(agent, AgentTransactionUtil.generateConversationId(agent.getActiveProfile(), null));
+    GetResourcesMessage(final ServiceProtocol protocol) throws IonicException {
+        super(protocol);
     }
 
     /**
@@ -37,11 +38,14 @@ public class GetResourcesMessage extends MessageBase {
      *
      * @param requestBase the user-generated object containing the attributes of the request
      * @return a {@link JsonObject} to be incorporated into the request payload
+     * @throws IonicException on SDK internal error
      */
     @Override
-    protected final JsonObject getJsonData(final AgentRequestBase requestBase) {
+    protected final JsonObject getJsonData(final AgentRequestBase requestBase) throws IonicException {
+        SdkData.checkTrue(requestBase instanceof GetResourcesRequest, SdkError.ISAGENT_ERROR);
+        final GetResourcesRequest getResourcesRequest = (GetResourcesRequest) requestBase;
         return Json.createObjectBuilder()
-                .add(IDC.Payload.REQUESTS, getJsonRequests((GetResourcesRequest) requestBase))
+                .add(IDC.Payload.REQUESTS, getJsonRequests(getResourcesRequest))
                 .build();
     }
 

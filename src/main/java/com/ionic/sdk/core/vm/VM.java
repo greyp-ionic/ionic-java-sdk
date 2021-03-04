@@ -17,7 +17,11 @@ public final class VM {
     /**
      * Constants associated with keys of environment variables available to the VM.
      */
-    public static class Env {
+    public static final class Env {
+
+        /** Checkstyle / FinalClass. */
+        private Env() {
+        }
 
         /**
          * The environment variable associated with the name of the platform machine (Windows).
@@ -43,7 +47,11 @@ public final class VM {
     /**
      * Constants associated with keys of system properties available to the VM.
      */
-    public static class Sys {
+    public static final class Sys {
+
+        /** Checkstyle / FinalClass. */
+        private Sys() {
+        }
 
         /**
          * The system property key associated with the home filesystem directory of the in-use JRE.
@@ -138,6 +146,15 @@ public final class VM {
      */
     public static String getUserHome() {
         return System.getProperty(Sys.USER_HOME);
+    }
+
+    /**
+     * Read the Java system property used to denote the active user.
+     *
+     * @return the native operating system active user
+     */
+    public static String getUserName() {
+        return System.getProperty(Sys.USER_NAME);
     }
 
     /**

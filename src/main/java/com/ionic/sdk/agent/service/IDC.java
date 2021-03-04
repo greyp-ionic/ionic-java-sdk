@@ -15,7 +15,11 @@ public final class IDC {
     /**
      * Constants related to the assembly of HTTP resource portion of request.
      */
-    public static class Resource {
+    public static final class Resource {
+
+        /** Checkstyle / FinalClass. */
+        private Resource() {
+        }
 
         /**
          * Server API version 2.2.
@@ -33,14 +37,29 @@ public final class IDC {
         public static final String SERVER_API_V24 = "v2.4";
 
         /**
+         * Resource for CreateAssertion requests.
+         */
+        public static final String ASSERTION_CREATE = "/assertions/create";
+
+        /**
          * Resource for CreateKeys requests (substitute server api version).
          */
         public static final String KEYS_CREATE = "/%s/keys/create";
 
         /**
+         * Resource for CreateKeys requests (prepend with context-specific path).
+         */
+        public static final String KEYS_CREATE_BASE = "/keys/create";
+
+        /**
          * Resource for GetKeys requests (substitute server api version).
          */
         public static final String KEYS_GET = "/%s/keys/fetch";
+
+        /**
+         * Resource for CreateKeys requests (prepend with context-specific path).
+         */
+        public static final String KEYS_GET_BASE = "/keys/fetch";
 
         /**
          * Resource for UpdateKeys requests (substitute server api version).
@@ -58,15 +77,30 @@ public final class IDC {
         public static final String RESOURCES_GET = "/%s/resources";
 
         /**
-         * Resource for CreateDevice requests (substitute server api version).
+         * Resource for CreateDevice requests (substitute server api version, keyspace).
          */
         public static final String DEVICE_CREATE = "/%s/register/%s";
+
+        /**
+         * Resource for GetKeyspace requests (substitute server api version, keyspace).
+         */
+        public static final String KEYSPACE_GET = "/%s/kns/keyspaces/%s";
+
+        /**
+         * Resource for identity sources document requests (substitute keyspace).
+         */
+        public static final String IDENTITY_SOURCES = "/keyspace/%s/identity_sources";
     }
 
     /**
      * Text names associated with components of ionic.com request conversation IDs.
      */
-    public static class Message {
+    public static final class Message {
+
+        /** Checkstyle / FinalClass. */
+        private Message() {
+        }
+
         /**
          * Server API version to be included in conversation IDs.
          */
@@ -86,7 +120,11 @@ public final class IDC {
     /**
      * Text names associated with identifiers in ionic.com request metadata.
      */
-    public static class Metadata {
+    public static final class Metadata {
+
+        /** Checkstyle / FinalClass. */
+        private Metadata() {
+        }
 
         /**
          * Agent metadata attribute name.
@@ -151,12 +189,26 @@ public final class IDC {
     /**
      * Text names associated with identifiers in ionic.com request / response payloads.
      */
-    public static class Payload {
+    public static final class Payload {
+
+        /** Checkstyle / FinalClass. */
+        private Payload() {
+        }
 
         /**
          * Request / response JSON attribute name.
          */
         public static final String ARGS = "args";
+
+        /**
+         * Request / response JSON attribute name.
+         */
+        public static final String ANSWERS = "answers";
+
+        /**
+         * Request / response JSON attribute name.
+         */
+        public static final String ASSERTION = "assertion";
 
         /**
          * Request / response JSON attribute name.
@@ -196,6 +248,26 @@ public final class IDC {
         /**
          * Request / response JSON attribute name.
          */
+        public static final String ENC_EK_NONCE = "encEKNonce";
+
+        /**
+         * Request / response JSON attribute name.
+         */
+        public static final String ENC_KAEK = "encKAEK";
+
+        /**
+         * Request / response JSON attribute name.
+         */
+        public static final String ENC_KARESP = "encKAResp";
+
+        /**
+         * Request / response JSON attribute name.
+         */
+        public static final String ENROLL = "enroll";
+
+        /**
+         * Request / response JSON attribute name.
+         */
         public static final String ENVELOPE = "envelope";
 
         /**
@@ -212,6 +284,21 @@ public final class IDC {
          * Request / response JSON attribute name.
          */
         public static final String FORCE = "force";
+
+        /**
+         * Request / response JSON attribute name.
+         */
+        public static final String FOR_URI = "forUri";
+
+        /**
+         * Request / response JSON attribute name.
+         */
+        public static final String FQDN = "fqdn";
+
+        /**
+         * Request / response JSON attribute name.
+         */
+        public static final String FULL = "full";
 
         /**
          * Request / response JSON attribute name.
@@ -246,6 +333,11 @@ public final class IDC {
         /**
          * Request / response JSON attribute name.
          */
+        public static final String KEYSPACE = "keyspace";
+
+        /**
+         * Request / response JSON attribute name.
+         */
         public static final String MATTRS = "mattrs";
 
         /**
@@ -267,6 +359,11 @@ public final class IDC {
          * Request / response JSON attribute name.
          */
         public static final String MSIG = "msig";
+
+        /**
+         * Request / response JSON attribute name.
+         */
+        public static final String OBLIGATIONS = "obligations";
 
         /**
          * Request / response JSON attribute name.
@@ -341,6 +438,21 @@ public final class IDC {
         /**
          * Request / response JSON attribute name.
          */
+        public static final String TENANT_ID = "tenantid";
+
+        /**
+         * Request / response JSON attribute name.
+         */
+        public static final String TTLSECONDS = "ttlSeconds";
+
+        /**
+         * Request / response JSON attribute name.
+         */
+        public static final String URL = "url";
+
+        /**
+         * Request / response JSON attribute name.
+         */
         public static final String G = "g";
 
         /**
@@ -360,9 +472,68 @@ public final class IDC {
     }
 
     /**
+     * Labels associated with the content of Machina Identity Assertion message payloads.
+     */
+    public static final class IdentityAssertion {
+
+        /** Checkstyle / FinalClass. */
+        private IdentityAssertion() {
+        }
+
+        /**
+         * Identity Assertion JSON attribute name.
+         */
+        public static final String ASSERTION_VERSION = "assnVersion";
+
+        /**
+         * Identity Assertion JSON attribute name.
+         */
+        public static final String ATTRIBUTES = "attributes";
+
+        /**
+         * Identity Assertion JSON attribute name.
+         */
+        public static final String DEVICE_ID = "deviceID";
+
+        /**
+         * Identity Assertion JSON attribute name.
+         */
+        public static final String ID = "id";
+
+        /**
+         * Identity Assertion JSON attribute name.
+         */
+        public static final String RECIPIENT = "recipient";
+
+        /**
+         * Identity Assertion JSON attribute name.
+         */
+        public static final String SIGNATURE_B64 = "signatureB64";
+
+        /**
+         * Identity Assertion JSON attribute name.
+         */
+        public static final String SIGNER = "signer";
+
+        /**
+         * Identity Assertion JSON attribute name.
+         */
+        public static final String VALID_AFTER = "validAfter";
+
+        /**
+         * Identity Assertion JSON attribute name.
+         */
+        public static final String VALID_UNTIL = "validUntil";
+    }
+
+    /**
      * Text names associated with identifiers used in signature generation.
      */
-    public static class Signature {
+    public static final class Signature {
+
+        /** Checkstyle / FinalClass. */
+        private Signature() {
+        }
 
         /**
          * Delimiter used when assembling a message signature.
@@ -388,7 +559,11 @@ public final class IDC {
     /**
      * Text names associated with identifiers used in Secret Share Key Persistor.
      */
-    public static class SSKP {
+    public static final class SSKP {
+
+        /** Checkstyle / FinalClass. */
+        private SSKP() {
+        }
 
         /**
          * Secret Share Key Persistor JSON attribute name.
@@ -404,7 +579,11 @@ public final class IDC {
     /**
      * Text strings associated with key attribute identifiers for which attribute level protection should be applied.
      */
-    public static class Protect {
+    public static final class Protect {
+
+        /** Checkstyle / FinalClass. */
+        private Protect() {
+        }
 
         /**
          * Protected key attribute name prefix.
